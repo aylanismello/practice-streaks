@@ -25,15 +25,22 @@ function calculateStreak(
   practiceId: string,
   logs: PracticeLog[],
   today: string
-): number {
+): { count: number; doneToday: boolean } {
   const dates = new Set(
     logs
       .filter((l) => l.practice_id === practiceId)
       .map((l) => l.practice_date)
   );
 
+  const doneToday = dates.has(today);
   let streak = 0;
   const d = new Date(today + "T12:00:00");
+
+  // If not done today, start counting from yesterday
+  // (the streak is still alive until end of day)
+  if (!doneToday) {
+    d.setDate(d.getDate() - 1);
+  }
 
   while (true) {
     const dateStr = formatDateLocal(d);
@@ -45,7 +52,7 @@ function calculateStreak(
     }
   }
 
-  return streak;
+  return { count: streak, doneToday };
 }
 
 function formatDateLocal(d: Date): string {
@@ -166,7 +173,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-3 mb-8">
         {practices.map((practice, i) => {
           const done = todayLogs.has(practice.id);
-          const streak = calculateStreak(practice.id, logs, today);
+          const { count: streak, doneToday } = calculateStreak(practice.id, logs, today);
+          const atRisk = streak > 0 && !doneToday;
           return (
             <div
               key={practice.id}
@@ -174,7 +182,7 @@ export default function Dashboard() {
               style={{
                 animationDelay: `${i * 50}ms`,
                 background: done ? "var(--accent-glow)" : "var(--bg-card)",
-                border: `1px solid ${done ? "var(--accent)" : "var(--border)"}`,
+                border: `1px solid ${done ? "var(--accent)" : atRisk ? "rgba(255,165,0,0.3)" : "var(--border)"}`,
               }}
             >
               <div className="flex items-start justify-between mb-2">
@@ -191,8 +199,8 @@ export default function Dashboard() {
                 {practice.name}
               </div>
               {streak > 0 && (
-                <div className="text-xs text-[var(--text-muted)] mt-1">
-                  {streak}d streak
+                <div className={`text-xs mt-1 ${atRisk ? "text-orange-400" : "text-[var(--text-muted)]"}`}>
+                  {streak}d streak{atRisk ? " ⚠️" : ""}
                   <StreakBadge count={streak} />
                 </div>
               )}
