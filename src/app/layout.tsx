@@ -4,6 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Practice Streaks",
   description: "A.F.M's daily somatic practice tracker",
+  icons: { icon: "/favicon.svg" },
 };
 
 export const viewport: Viewport = {
