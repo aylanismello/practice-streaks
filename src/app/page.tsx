@@ -91,7 +91,7 @@ function getMonthRange(today: string, offset: number): { start: string; end: str
   return { start, end };
 }
 
-function filterByMonth(items: { day: string }[], start: string, end: string) {
+function filterByMonth<T extends { day: string }>(items: T[], start: string, end: string): T[] {
   return items.filter((i) => i.day >= start && i.day <= end);
 }
 
