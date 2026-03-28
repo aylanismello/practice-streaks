@@ -9,6 +9,13 @@ import {
   getDayLabel,
 } from "@/lib/dates";
 
+interface OuraData {
+  sleep: { average_hrv: number; day: string }[];
+  readiness: { score: number; day: string }[];
+  resilience: { level: string; day: string }[];
+  dailySleep: { score: number; day: string }[];
+}
+
 interface PracticeType {
   id: string;
   name: string;
@@ -73,11 +80,185 @@ function StreakBadge({ count }: { count: number }) {
   );
 }
 
+function getMonthRange(today: string, offset: number): { start: string; end: string } {
+  const d = new Date(today + "T12:00:00");
+  d.setMonth(d.getMonth() + offset);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const start = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const end = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { start, end };
+}
+
+function filterByMonth(items: { day: string }[], start: string, end: string) {
+  return items.filter((i) => i.day >= start && i.day <= end);
+}
+
+function MetricCard({
+  label,
+  value,
+  unit,
+  delta,
+  deltaUnit,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  delta: number | null;
+  deltaUnit?: string;
+}) {
+  return (
+    <div
+      className="rounded-xl p-4"
+      style={{
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+      }}
+    >
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">
+        {label}
+      </div>
+      <div className="text-2xl font-bold text-amber-400">
+        {value}
+        {unit && <span className="text-sm font-normal text-[var(--text-muted)] ml-0.5">{unit}</span>}
+      </div>
+      {delta !== null && (
+        <div className={`text-xs mt-1 ${delta >= 0 ? "text-green-400" : "text-red-400"}`}>
+          {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(delta % 1 === 0 ? 0 : 1)}
+          {deltaUnit ?? ""}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HrvChart({ data }: { data: { average_hrv: number; day: string }[] }) {
+  if (data.length === 0) return null;
+
+  const sorted = [...data].sort((a, b) => a.day.localeCompare(b.day));
+  // Deduplicate by day (take last entry per day)
+  const byDay = new Map<string, number>();
+  for (const d of sorted) {
+    if (d.average_hrv > 0) byDay.set(d.day, d.average_hrv);
+  }
+  const points = Array.from(byDay.entries()).map(([day, hrv]) => ({ day, hrv }));
+  if (points.length < 2) return null;
+
+  const hrvValues = points.map((p) => p.hrv);
+  const minHrv = Math.floor(Math.min(...hrvValues) * 0.9);
+  const maxHrv = Math.ceil(Math.max(...hrvValues) * 1.1);
+  const avgHrv = hrvValues.reduce((a, b) => a + b, 0) / hrvValues.length;
+
+  const w = 600;
+  const h = 200;
+  const pad = { top: 10, right: 10, bottom: 30, left: 40 };
+  const plotW = w - pad.left - pad.right;
+  const plotH = h - pad.top - pad.bottom;
+
+  const xScale = (i: number) => pad.left + (i / (points.length - 1)) * plotW;
+  const yScale = (v: number) =>
+    pad.top + plotH - ((v - minHrv) / (maxHrv - minHrv)) * plotH;
+
+  const pathD = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${xScale(i).toFixed(1)},${yScale(p.hrv).toFixed(1)}`)
+    .join(" ");
+
+  const avgY = yScale(avgHrv);
+
+  // X-axis labels: show ~6 labels
+  const labelInterval = Math.max(1, Math.floor(points.length / 6));
+  const xLabels = points.filter((_, i) => i % labelInterval === 0 || i === points.length - 1);
+
+  // Y-axis labels
+  const yTicks = 4;
+  const yLabels = Array.from({ length: yTicks + 1 }, (_, i) =>
+    Math.round(minHrv + (i / yTicks) * (maxHrv - minHrv))
+  );
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
+        HRV — Last 90 Days
+      </h2>
+      <div
+        className="rounded-xl border border-[var(--border)] p-4"
+        style={{ background: "var(--bg-card)" }}
+      >
+        <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 200 }}>
+          {/* Y grid + labels */}
+          {yLabels.map((v) => (
+            <g key={v}>
+              <line
+                x1={pad.left}
+                x2={w - pad.right}
+                y1={yScale(v)}
+                y2={yScale(v)}
+                stroke="var(--border)"
+                strokeWidth="1"
+              />
+              <text
+                x={pad.left - 6}
+                y={yScale(v) + 4}
+                textAnchor="end"
+                fill="var(--text-muted)"
+                fontSize="10"
+              >
+                {v}
+              </text>
+            </g>
+          ))}
+          {/* Average dashed line */}
+          <line
+            x1={pad.left}
+            x2={w - pad.right}
+            y1={avgY}
+            y2={avgY}
+            stroke="#f59e0b"
+            strokeWidth="1"
+            strokeDasharray="6,4"
+            opacity="0.5"
+          />
+          <text
+            x={w - pad.right}
+            y={avgY - 6}
+            textAnchor="end"
+            fill="#f59e0b"
+            fontSize="10"
+            opacity="0.7"
+          >
+            avg {Math.round(avgHrv)}
+          </text>
+          {/* Line */}
+          <path d={pathD} fill="none" stroke="#f59e0b" strokeWidth="2" />
+          {/* X labels */}
+          {xLabels.map((p) => {
+            const i = points.indexOf(p);
+            return (
+              <text
+                key={p.day}
+                x={xScale(i)}
+                y={h - 6}
+                textAnchor="middle"
+                fill="var(--text-muted)"
+                fontSize="10"
+              >
+                {p.day.slice(5)}
+              </text>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [practices, setPractices] = useState<PracticeType[]>([]);
   const [logs, setLogs] = useState<PracticeLog[]>([]);
   const [today, setToday] = useState("");
   const [loading, setLoading] = useState(true);
+  const [ouraData, setOuraData] = useState<OuraData | null>(null);
 
   const fetchData = useCallback(async () => {
     const effectiveDate = getEffectiveDate();
@@ -102,6 +283,12 @@ export default function Dashboard() {
     if (typesRes.data) setPractices(typesRes.data);
     if (logsRes.data) setLogs(logsRes.data);
     setLoading(false);
+
+    // Fetch Oura data (non-blocking)
+    fetch("/api/oura")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data && !data.error) setOuraData(data); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -267,6 +454,80 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* North Star Metrics */}
+      {ouraData && today && (() => {
+        const curr = getMonthRange(today, 0);
+        const prev = getMonthRange(today, -1);
+
+        const currSleep = filterByMonth(ouraData.sleep, curr.start, curr.end);
+        const prevSleep = filterByMonth(ouraData.sleep, prev.start, prev.end);
+        const currHrvVals = currSleep.map((s) => s.average_hrv).filter((v) => v > 0);
+        const prevHrvVals = prevSleep.map((s) => s.average_hrv).filter((v) => v > 0);
+        const avgHrv = currHrvVals.length > 0 ? currHrvVals.reduce((a, b) => a + b, 0) / currHrvVals.length : 0;
+        const prevAvgHrv = prevHrvVals.length > 0 ? prevHrvVals.reduce((a, b) => a + b, 0) / prevHrvVals.length : 0;
+
+        const currRes = filterByMonth(ouraData.resilience, curr.start, curr.end);
+        const prevRes = filterByMonth(ouraData.resilience, prev.start, prev.end);
+        const strongPct = currRes.length > 0 ? (currRes.filter((r) => r.level === "strong").length / currRes.length) * 100 : 0;
+        const prevStrongPct = prevRes.length > 0 ? (prevRes.filter((r) => r.level === "strong").length / prevRes.length) * 100 : 0;
+
+        // Consistency from practice_log
+        const currMonth = curr.start.slice(0, 7);
+        const prevMonth = prev.start.slice(0, 7);
+        const currDaysWithPractice = new Set(logs.filter((l) => l.practice_date.startsWith(currMonth)).map((l) => l.practice_date)).size;
+        const prevDaysWithPractice = new Set(logs.filter((l) => l.practice_date.startsWith(prevMonth)).map((l) => l.practice_date)).size;
+        const daysInCurrMonth = new Date(parseInt(curr.start), parseInt(curr.start.slice(5, 7)), 0).getDate();
+        const todayDay = parseInt(today.slice(8, 10));
+        const effectiveDaysCurr = today.startsWith(currMonth) ? todayDay : daysInCurrMonth;
+        const daysInPrevMonth = new Date(parseInt(prev.start), parseInt(prev.start.slice(5, 7)), 0).getDate();
+        const consistencyPct = effectiveDaysCurr > 0 ? (currDaysWithPractice / effectiveDaysCurr) * 100 : 0;
+        const prevConsistencyPct = daysInPrevMonth > 0 ? (prevDaysWithPractice / daysInPrevMonth) * 100 : 0;
+
+        const currDailySleep = filterByMonth(ouraData.dailySleep, curr.start, curr.end);
+        const prevDailySleep = filterByMonth(ouraData.dailySleep, prev.start, prev.end);
+        const avgSleepScore = currDailySleep.length > 0 ? currDailySleep.reduce((a, b) => a + b.score, 0) / currDailySleep.length : 0;
+        const prevAvgSleepScore = prevDailySleep.length > 0 ? prevDailySleep.reduce((a, b) => a + b.score, 0) / prevDailySleep.length : 0;
+
+        return (
+          <div className="mt-8">
+            <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
+              North Star Metrics
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <MetricCard
+                label="Avg HRV"
+                value={Math.round(avgHrv).toString()}
+                unit="ms"
+                delta={prevAvgHrv > 0 ? avgHrv - prevAvgHrv : null}
+                deltaUnit="ms"
+              />
+              <MetricCard
+                label="Resilience"
+                value={Math.round(strongPct).toString()}
+                unit="%"
+                delta={prevRes.length > 0 ? strongPct - prevStrongPct : null}
+                deltaUnit="%"
+              />
+              <MetricCard
+                label="Consistency"
+                value={Math.round(consistencyPct).toString()}
+                unit="%"
+                delta={prevDaysWithPractice > 0 ? consistencyPct - prevConsistencyPct : null}
+                deltaUnit="%"
+              />
+              <MetricCard
+                label="Sleep Score"
+                value={Math.round(avgSleepScore).toString()}
+                delta={prevAvgSleepScore > 0 ? avgSleepScore - prevAvgSleepScore : null}
+              />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* HRV Trend Chart */}
+      {ouraData && <HrvChart data={ouraData.sleep} />}
     </main>
   );
 }
