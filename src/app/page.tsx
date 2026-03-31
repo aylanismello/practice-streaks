@@ -253,6 +253,40 @@ function HrvChart({ data }: { data: { average_hrv: number; day: string }[] }) {
   );
 }
 
+function TripCountdown() {
+  const tripDate = new Date("2026-05-21T00:00:00");
+  const now = new Date();
+  const diffMs = tripDate.getTime() - now.getTime();
+  const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (daysRemaining < 0) return null;
+
+  return (
+    <div className="mt-10 text-center">
+      <div className="inline-block">
+        <div className="text-[var(--text-muted)] text-xs uppercase tracking-[0.2em] mb-3">
+          Countdown
+        </div>
+        <div className="text-lg md:text-xl font-medium tracking-wide mb-2">
+          folie à trois{" "}
+          <span className="inline-block" role="img" aria-label="China flag">
+            🇨🇳
+          </span>
+        </div>
+        <div className="text-5xl md:text-6xl font-light tabular-nums tracking-tight mb-2 text-[var(--text)]">
+          {daysRemaining}
+        </div>
+        <div className="text-sm text-[var(--text-muted)] mb-1">
+          {daysRemaining === 1 ? "day" : "days"}
+        </div>
+        <div className="text-xs text-[var(--text-muted)] opacity-60 tracking-wide">
+          FangYuan Retreat · May 21
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [practices, setPractices] = useState<PracticeType[]>([]);
   const [logs, setLogs] = useState<PracticeLog[]>([]);
@@ -327,19 +361,19 @@ export default function Dashboard() {
   const last7Days = getLast7Days(today);
 
   return (
-    <main className="max-w-md mx-auto px-4 py-6 pb-12">
+    <main className="max-w-[960px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-12">
       {/* Header */}
-      <div className="text-center mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight mb-1">
+      <div className="text-center mb-6 md:mb-8">
+        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-1">
           Practice Streaks
         </h1>
-        <p className="text-[var(--text-muted)] text-sm">
+        <p className="text-[var(--text-muted)] text-sm md:text-base">
           {formatDisplayDate(today)}
         </p>
       </div>
 
       {/* Progress bar */}
-      <div className="mb-6">
+      <div className="mb-6 md:mb-8 max-w-md mx-auto md:max-w-lg">
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm text-[var(--text-muted)]">Today</span>
           <span className="text-sm font-medium">
@@ -357,7 +391,7 @@ export default function Dashboard() {
       </div>
 
       {/* Practice cards */}
-      <div className="grid grid-cols-2 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-8 md:mb-10">
         {practices.map((practice, i) => {
           const done = todayLogs.has(practice.id);
           const { count: streak, doneToday } = calculateStreak(practice.id, logs, today);
@@ -365,7 +399,7 @@ export default function Dashboard() {
           return (
             <div
               key={practice.id}
-              className="animate-fade-in rounded-xl p-4 transition-colors duration-200"
+              className="animate-fade-in rounded-xl p-4 md:p-5 transition-colors duration-200"
               style={{
                 animationDelay: `${i * 50}ms`,
                 background: done ? "var(--accent-glow)" : "var(--bg-card)",
@@ -373,20 +407,20 @@ export default function Dashboard() {
               }}
             >
               <div className="flex items-start justify-between mb-2">
-                <span className="text-2xl">{practice.emoji}</span>
+                <span className="text-2xl md:text-3xl">{practice.emoji}</span>
                 {done ? (
-                  <span className="animate-check-pop text-[var(--accent)] text-lg">
+                  <span className="animate-check-pop text-[var(--accent)] text-lg md:text-xl">
                     ✓
                   </span>
                 ) : (
-                  <span className="text-[var(--text-muted)] text-lg">○</span>
+                  <span className="text-[var(--text-muted)] text-lg md:text-xl">○</span>
                 )}
               </div>
-              <div className="text-sm font-medium leading-tight">
+              <div className="text-sm md:text-base font-medium leading-tight">
                 {practice.name}
               </div>
               {streak > 0 && (
-                <div className={`text-xs mt-1 ${atRisk ? "text-orange-400" : "text-[var(--text-muted)]"}`}>
+                <div className={`text-xs md:text-sm mt-1 ${atRisk ? "text-orange-400" : "text-[var(--text-muted)]"}`}>
                   {streak}d streak{atRisk ? " ⚠️" : ""}
                   <StreakBadge count={streak} />
                 </div>
@@ -396,62 +430,58 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Weekly view */}
+      {/* Weekly view — redesigned as label + dot matrix */}
       <div>
         <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
           Last 7 Days
         </h2>
-        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4">
-          {/* Day headers */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {last7Days.map((day) => (
-              <div
-                key={day}
-                className="text-center text-[10px] text-[var(--text-muted)]"
-              >
-                {getDayLabel(day)}
-              </div>
-            ))}
-          </div>
-
-          {/* Practice rows */}
-          {practices.map((practice) => (
-            <div
-              key={practice.id}
-              className="grid grid-cols-7 gap-1 mb-1.5 items-center"
-            >
-              {last7Days.map((day) => {
-                const done = logs.some(
-                  (l) =>
-                    l.practice_date === day && l.practice_id === practice.id
-                );
-                return (
-                  <div key={day} className="flex justify-center">
-                    <div
-                      className="w-5 h-5 rounded-sm transition-colors duration-200"
-                      style={{
-                        background: done ? "var(--accent)" : "var(--border)",
-                        opacity: done ? 1 : 0.4,
-                      }}
-                      title={`${practice.name} - ${day}`}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-
-          {/* Practice labels */}
-          <div className="mt-2 pt-2 border-t border-[var(--border)] flex flex-wrap gap-2">
-            {practices.map((p) => (
-              <span
-                key={p.id}
-                className="text-[10px] text-[var(--text-muted)]"
-              >
-                {p.emoji} {p.name.split(" ")[0]}
-              </span>
-            ))}
-          </div>
+        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 md:p-5 overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="text-left pb-2 pr-3" />
+                {last7Days.map((day) => (
+                  <th
+                    key={day}
+                    className="text-center text-[10px] md:text-xs text-[var(--text-muted)] pb-2 font-normal px-1"
+                  >
+                    {getDayLabel(day)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {practices.map((practice) => (
+                <tr key={practice.id}>
+                  <td className="pr-3 py-1.5 whitespace-nowrap">
+                    <span className="text-sm md:text-base">{practice.emoji}</span>
+                    <span className="hidden md:inline text-xs text-[var(--text-muted)] ml-1.5">
+                      {practice.name}
+                    </span>
+                  </td>
+                  {last7Days.map((day) => {
+                    const done = logs.some(
+                      (l) =>
+                        l.practice_date === day && l.practice_id === practice.id
+                    );
+                    return (
+                      <td key={day} className="text-center py-1.5 px-1">
+                        <span
+                          className="inline-block w-5 h-5 md:w-6 md:h-6 rounded-full"
+                          style={{
+                            background: done ? "var(--accent)" : "transparent",
+                            border: done ? "none" : "2px solid var(--border)",
+                            opacity: done ? 1 : 0.5,
+                          }}
+                          title={`${practice.name} - ${day}`}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -528,6 +558,9 @@ export default function Dashboard() {
 
       {/* HRV Trend Chart */}
       {ouraData && <HrvChart data={ouraData.sleep} />}
+
+      {/* Trip countdown */}
+      <TripCountdown />
     </main>
   );
 }
