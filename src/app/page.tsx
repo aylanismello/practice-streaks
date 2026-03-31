@@ -353,7 +353,7 @@ function HrvChart({ data }: { data: { average_hrv: number; day: string }[] }) {
   );
 }
 
-function TripCountdown() {
+function TripCountdown({ inline }: { inline?: boolean }) {
   const tripDate = new Date("2026-05-21T00:00:00");
   const now = new Date();
   const diffMs = tripDate.getTime() - now.getTime();
@@ -361,19 +361,36 @@ function TripCountdown() {
 
   if (daysRemaining < 0) return null;
 
+  if (inline) {
+    // Compact version for top-right on desktop
+    return (
+      <div className="text-right">
+        <div className="text-[var(--text-muted)] text-[10px] uppercase tracking-[0.15em] mb-1">
+          folie à trois 🇨🇳
+        </div>
+        <div className="text-3xl font-light tabular-nums tracking-tight text-[var(--text)]">
+          {daysRemaining}
+        </div>
+        <div className="text-[10px] text-[var(--text-muted)]">
+          days · May 21
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-10 text-center">
       <div className="inline-block">
         <div className="text-[var(--text-muted)] text-xs uppercase tracking-[0.2em] mb-3">
           Countdown
         </div>
-        <div className="text-lg md:text-xl font-medium tracking-wide mb-2">
+        <div className="text-lg font-medium tracking-wide mb-2">
           folie à trois{" "}
           <span className="inline-block" role="img" aria-label="China flag">
             🇨🇳
           </span>
         </div>
-        <div className="text-5xl md:text-6xl font-light tabular-nums tracking-tight mb-2 text-[var(--text)]">
+        <div className="text-5xl font-light tabular-nums tracking-tight mb-2 text-[var(--text)]">
           {daysRemaining}
         </div>
         <div className="text-sm text-[var(--text-muted)] mb-1">
@@ -462,14 +479,21 @@ export default function Dashboard() {
 
   return (
     <main className="max-w-[960px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-12">
-      {/* Header */}
-      <div className="text-center mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-1">
-          Practice Streaks
-        </h1>
-        <p className="text-[var(--text-muted)] text-sm md:text-base">
-          {formatDisplayDate(today)}
-        </p>
+      {/* Header with countdown on desktop */}
+      <div className="flex items-start justify-between mb-6 md:mb-8">
+        <div className="flex-1" />
+        <div className="text-center">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-1">
+            Practice Streaks
+          </h1>
+          <p className="text-[var(--text-muted)] text-sm md:text-base">
+            {formatDisplayDate(today)}
+          </p>
+        </div>
+        <div className="flex-1 hidden md:flex justify-end">
+          <TripCountdown inline />
+        </div>
+        <div className="flex-1 md:hidden" />
       </div>
 
       {/* Progress bar */}
@@ -644,8 +668,10 @@ export default function Dashboard() {
       {/* HRV Trend Chart */}
       {ouraData && <HrvChart data={ouraData.sleep} />}
 
-      {/* Trip countdown */}
-      <TripCountdown />
+      {/* Trip countdown — mobile only (desktop shows it top-right) */}
+      <div className="md:hidden">
+        <TripCountdown />
+      </div>
     </main>
   );
 }
