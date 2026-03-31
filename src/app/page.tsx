@@ -95,40 +95,140 @@ function filterByMonth<T extends { day: string }>(items: T[], start: string, end
   return items.filter((i) => i.day >= start && i.day <= end);
 }
 
-function MetricCard({
-  label,
-  value,
-  unit,
-  delta,
-  deltaUnit,
-}: {
-  label: string;
-  value: string;
-  unit?: string;
-  delta: number | null;
-  deltaUnit?: string;
-}) {
+function HrvCard({ avg, delta }: { avg: number; delta: number | null }) {
+  const context = delta === null ? null : Math.abs(delta) <= 2 ? "stable" : delta > 0 ? "trending up" : "trending down";
+  const contextColor = context === "stable" ? "text-[var(--text-muted)]" : context === "trending up" ? "text-green-400" : "text-amber-400";
   return (
-    <div
-      className="rounded-xl p-4"
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">
-        {label}
-      </div>
+    <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Avg HRV</div>
       <div className="text-2xl font-bold text-amber-400">
-        {value}
-        {unit && <span className="text-sm font-normal text-[var(--text-muted)] ml-0.5">{unit}</span>}
+        {Math.round(avg)}<span className="text-sm font-normal text-[var(--text-muted)] ml-0.5">ms</span>
       </div>
       {delta !== null && (
-        <div className={`text-xs mt-1 ${delta >= 0 ? "text-green-400" : "text-red-400"}`}>
-          {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(delta % 1 === 0 ? 0 : 1)}
-          {deltaUnit ?? ""}
+        <div className={`text-xs mt-1 ${contextColor}`}>
+          {context} {context !== "stable" && `(${delta > 0 ? "+" : ""}${delta.toFixed(1)}ms)`}
         </div>
       )}
+    </div>
+  );
+}
+
+function ResilienceCard({
+  distribution,
+  prevStrongSolidPct,
+}: {
+  distribution: Record<string, number>;
+  prevStrongSolidPct: number | null;
+}) {
+  const levels = ["exceptional", "strong", "solid", "adequate", "limited"] as const;
+  const colors: Record<string, string> = {
+    exceptional: "#eab308",
+    strong: "#22c55e",
+    solid: "#14b8a6",
+    adequate: "#facc15",
+    limited: "#ef4444",
+  };
+  const total = Object.values(distribution).reduce((a, b) => a + b, 0);
+  const strongSolidPct = total > 0
+    ? ((distribution.exceptional ?? 0) + (distribution.strong ?? 0) + (distribution.solid ?? 0)) / total * 100
+    : 0;
+  const delta = prevStrongSolidPct !== null ? strongSolidPct - prevStrongSolidPct : null;
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Resilience</div>
+      <div className="text-2xl font-bold text-amber-400 mb-2">
+        {Math.round(strongSolidPct)}<span className="text-sm font-normal text-[var(--text-muted)] ml-0.5">% solid+</span>
+      </div>
+      {/* Stacked bar */}
+      {total > 0 && (
+        <div className="flex h-3 rounded-full overflow-hidden mb-2">
+          {levels.map((level) => {
+            const count = distribution[level] ?? 0;
+            if (count === 0) return null;
+            const pct = (count / total) * 100;
+            return (
+              <div
+                key={level}
+                style={{ width: `${pct}%`, backgroundColor: colors[level] }}
+                title={`${level}: ${Math.round(pct)}%`}
+              />
+            );
+          })}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+        {levels.map((level) => {
+          const count = distribution[level] ?? 0;
+          if (count === 0) return null;
+          const pct = Math.round((count / total) * 100);
+          return (
+            <span key={level} className="text-[10px] text-[var(--text-muted)]">
+              <span className="inline-block w-1.5 h-1.5 rounded-full mr-0.5" style={{ backgroundColor: colors[level] }} />
+              {pct}% {level}
+            </span>
+          );
+        })}
+      </div>
+      {delta !== null && (
+        <div className={`text-xs mt-1 ${delta >= 0 ? "text-green-400" : "text-amber-400"}`}>
+          {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(0)}% vs last month
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConsistencyCard({
+  days,
+  total,
+  pct,
+  delta,
+}: {
+  days: number;
+  total: number;
+  pct: number;
+  delta: number | null;
+}) {
+  const radius = 20;
+  const circumference = 2 * Math.PI * radius;
+  const filled = (pct / 100) * circumference;
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Consistency</div>
+      <div className="flex items-center gap-3">
+        <svg width="52" height="52" viewBox="0 0 52 52">
+          <circle cx="26" cy="26" r={radius} fill="none" stroke="var(--border)" strokeWidth="4" />
+          <circle
+            cx="26" cy="26" r={radius} fill="none"
+            stroke="#f59e0b" strokeWidth="4" strokeLinecap="round"
+            strokeDasharray={`${filled} ${circumference - filled}`}
+            transform="rotate(-90 26 26)"
+          />
+          <text x="26" y="26" textAnchor="middle" dominantBaseline="central" fill="#f59e0b" fontSize="12" fontWeight="bold">
+            {Math.round(pct)}%
+          </text>
+        </svg>
+        <div>
+          <div className="text-sm font-medium text-[var(--text)]">{days}/{total} days</div>
+          {delta !== null && (
+            <div className={`text-xs ${delta >= 0 ? "text-green-400" : "text-amber-400"}`}>
+              {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(0)}% vs last month
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WindowCard() {
+  return (
+    <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", opacity: 0.6 }}>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Window of Tolerance</div>
+      <div className="text-2xl font-bold text-[var(--text-muted)]">—</div>
+      <div className="text-xs mt-1 text-[var(--text-muted)]">Weekly check-in</div>
     </div>
   );
 }
@@ -490,19 +590,26 @@ export default function Dashboard() {
         const curr = getMonthRange(today, 0);
         const prev = getMonthRange(today, -1);
 
+        // HRV
         const currSleep = filterByMonth(ouraData.sleep, curr.start, curr.end);
         const prevSleep = filterByMonth(ouraData.sleep, prev.start, prev.end);
         const currHrvVals = currSleep.map((s) => s.average_hrv).filter((v) => v > 0);
         const prevHrvVals = prevSleep.map((s) => s.average_hrv).filter((v) => v > 0);
         const avgHrv = currHrvVals.length > 0 ? currHrvVals.reduce((a, b) => a + b, 0) / currHrvVals.length : 0;
         const prevAvgHrv = prevHrvVals.length > 0 ? prevHrvVals.reduce((a, b) => a + b, 0) / prevHrvVals.length : 0;
+        const hrvDelta = prevAvgHrv > 0 ? avgHrv - prevAvgHrv : null;
 
+        // Resilience distribution
         const currRes = filterByMonth(ouraData.resilience, curr.start, curr.end);
         const prevRes = filterByMonth(ouraData.resilience, prev.start, prev.end);
-        const strongPct = currRes.length > 0 ? (currRes.filter((r) => r.level === "strong").length / currRes.length) * 100 : 0;
-        const prevStrongPct = prevRes.length > 0 ? (prevRes.filter((r) => r.level === "strong").length / prevRes.length) * 100 : 0;
+        const currDist: Record<string, number> = {};
+        for (const r of currRes) currDist[r.level] = (currDist[r.level] ?? 0) + 1;
+        const prevTotal = prevRes.length;
+        const prevStrongSolidPct = prevTotal > 0
+          ? (prevRes.filter((r) => ["exceptional", "strong", "solid"].includes(r.level)).length / prevTotal) * 100
+          : null;
 
-        // Consistency from practice_log
+        // Consistency
         const currMonth = curr.start.slice(0, 7);
         const prevMonth = prev.start.slice(0, 7);
         const currDaysWithPractice = new Set(logs.filter((l) => l.practice_date.startsWith(currMonth)).map((l) => l.practice_date)).size;
@@ -514,42 +621,20 @@ export default function Dashboard() {
         const consistencyPct = effectiveDaysCurr > 0 ? (currDaysWithPractice / effectiveDaysCurr) * 100 : 0;
         const prevConsistencyPct = daysInPrevMonth > 0 ? (prevDaysWithPractice / daysInPrevMonth) * 100 : 0;
 
-        const currDailySleep = filterByMonth(ouraData.dailySleep, curr.start, curr.end);
-        const prevDailySleep = filterByMonth(ouraData.dailySleep, prev.start, prev.end);
-        const avgSleepScore = currDailySleep.length > 0 ? currDailySleep.reduce((a, b) => a + b.score, 0) / currDailySleep.length : 0;
-        const prevAvgSleepScore = prevDailySleep.length > 0 ? prevDailySleep.reduce((a, b) => a + b.score, 0) / prevDailySleep.length : 0;
-
         return (
           <div className="mt-8">
             <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
               North Star Metrics
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <MetricCard
-                label="Avg HRV"
-                value={Math.round(avgHrv).toString()}
-                unit="ms"
-                delta={prevAvgHrv > 0 ? avgHrv - prevAvgHrv : null}
-                deltaUnit="ms"
-              />
-              <MetricCard
-                label="Resilience"
-                value={Math.round(strongPct).toString()}
-                unit="%"
-                delta={prevRes.length > 0 ? strongPct - prevStrongPct : null}
-                deltaUnit="%"
-              />
-              <MetricCard
-                label="Consistency"
-                value={Math.round(consistencyPct).toString()}
-                unit="%"
+            <div className="grid grid-cols-2 gap-3">
+              <HrvCard avg={avgHrv} delta={hrvDelta} />
+              <WindowCard />
+              <ResilienceCard distribution={currDist} prevStrongSolidPct={prevStrongSolidPct} />
+              <ConsistencyCard
+                days={currDaysWithPractice}
+                total={effectiveDaysCurr}
+                pct={consistencyPct}
                 delta={prevDaysWithPractice > 0 ? consistencyPct - prevConsistencyPct : null}
-                deltaUnit="%"
-              />
-              <MetricCard
-                label="Sleep Score"
-                value={Math.round(avgSleepScore).toString()}
-                delta={prevAvgSleepScore > 0 ? avgSleepScore - prevAvgSleepScore : null}
               />
             </div>
           </div>
