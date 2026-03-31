@@ -18,9 +18,14 @@ jobs:
 
       - name: Delete and recreate Vercel project
         run: |
-          # Delete existing project (ignore errors if it doesn't exist)
-          curl -s -X DELETE "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}?teamId=$VERCEL_ORG_ID" \
+          set -e
+          
+          # Delete by name (works even if project ID changed)
+          curl -s -X DELETE "https://api.vercel.com/v9/projects/practice-streaks?teamId=$VERCEL_ORG_ID" \
             -H "Authorization: Bearer $VERCEL_TOKEN" || true
+          
+          # Wait a moment for deletion to propagate
+          sleep 2
           
           # Create fresh project
           RESULT=$(curl -s -X POST "https://api.vercel.com/v10/projects?teamId=$VERCEL_ORG_ID" \
@@ -28,7 +33,12 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"name":"practice-streaks","framework":"nextjs","buildCommand":"npm run build"}')
           
-          NEW_ID=$(echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['id'])")
+          NEW_ID=$(echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id', ''))")
+          if [ -z "$NEW_ID" ]; then
+            echo "Failed to create project: $RESULT"
+            exit 1
+          fi
+          echo "Created project: $NEW_ID"
           echo "VERCEL_PROJECT_ID=$NEW_ID" >> $GITHUB_ENV
           
           # Set node 20.x
