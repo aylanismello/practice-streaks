@@ -6,24 +6,53 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
       - run: npm install -g vercel
-      - run: vercel pull --yes --environment production --token $VERCEL_TOKEN
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      - run: vercel build --prod --token $VERCEL_TOKEN
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      - run: vercel deploy --prebuilt --prod --token $VERCEL_TOKEN
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Delete and recreate Vercel project
+        run: |
+          # Delete existing project (ignore errors if it doesn't exist)
+          curl -s -X DELETE "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}?teamId=$VERCEL_ORG_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" || true
+          
+          # Create fresh project
+          RESULT=$(curl -s -X POST "https://api.vercel.com/v10/projects?teamId=$VERCEL_ORG_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"practice-streaks","framework":"nextjs","buildCommand":"npm run build"}')
+          
+          NEW_ID=$(echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['id'])")
+          echo "VERCEL_PROJECT_ID=$NEW_ID" >> $GITHUB_ENV
+          
+          # Set node 20.x
+          curl -s -X PATCH "https://api.vercel.com/v9/projects/$NEW_ID?teamId=$VERCEL_ORG_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"nodeVersion":"20.x"}'
+          
+          # Set env vars
+          for KEY_VAL in \
+            "OURA_ACCESS_TOKEN:${{ secrets.OURA_ACCESS_TOKEN }}" \
+            "NEXT_PUBLIC_SUPABASE_URL:${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
+            "NEXT_PUBLIC_SUPABASE_ANON_KEY:${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+            "SUPABASE_SERVICE_ROLE_KEY:${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+          do
+            KEY="${KEY_VAL%%:*}"
+            VAL="${KEY_VAL#*:}"
+            curl -s -X POST "https://api.vercel.com/v10/projects/$NEW_ID/env?teamId=$VERCEL_ORG_ID" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"key\":\"$KEY\",\"value\":\"$VAL\",\"type\":\"encrypted\",\"target\":[\"production\",\"preview\",\"development\"]}"
+          done
+
+      - name: Link and deploy
+        run: |
+          vercel link --yes --project practice-streaks --token $VERCEL_TOKEN
+          vercel --prod --yes --token $VERCEL_TOKEN
