@@ -1534,7 +1534,7 @@ export default function Dashboard() {
                               {count ? (
                                 <span className="relative inline-block">
                                   <span className="text-base">🎯</span>
-                                  {count > 1 && (
+                                  {count >= 1 && (
                                     <span className="absolute -top-1 -right-2 text-[9px] font-bold text-green-400">{count}</span>
                                   )}
                                 </span>
