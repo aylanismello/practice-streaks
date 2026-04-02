@@ -15,11 +15,11 @@ import type { ViewMode } from "@/lib/dates";
 const TARGET_BEDTIME = "23:00"; // 11:00 PM Pacific — TODO: read from supabase
 
 interface OuraData {
-  sleep: { average_hrv: number; day: string; bedtime_start: string }[];
+  sleep: { average_hrv: number; day: string; bedtime_start: string | null }[];
   readiness: { score: number; day: string }[];
   resilience: { level: string; day: string }[];
   dailySleep: { score: number; day: string }[];
-  stress: { day: string; stress_high: number; recovery_high: number; day_summary: string }[];
+  stress: { day: string; stress_high: number; recovery_high: number; day_summary: string | null }[];
 }
 
 interface PracticeType {
@@ -273,7 +273,7 @@ function BedtimeCard({ sleepData, today, logs, practices }: { sleepData: OuraDat
     .sort((a, b) => b.day.localeCompare(a.day));
   const latest = sorted[0];
 
-  const actualMin = latest ? parseBedtimeMinutes(latest.bedtime_start) : null;
+  const actualMin = latest?.bedtime_start ? parseBedtimeMinutes(latest.bedtime_start) : null;
   const lastNightDelta = actualMin !== null ? bedtimeDeltaMinutes(actualMin, targetMin) : null;
   const lastNightAbsMin = lastNightDelta !== null ? Math.abs(lastNightDelta) : null;
 
@@ -361,7 +361,7 @@ function HrvChart({ data }: { data: { average_hrv: number; day: string }[] }) {
   // Deduplicate by day (take last entry per day)
   const byDay = new Map<string, number>();
   for (const d of sorted) {
-    if (d.average_hrv > 0) byDay.set(d.day, d.average_hrv);
+    if (d.average_hrv && d.average_hrv > 0) byDay.set(d.day, d.average_hrv);
   }
   const points = Array.from(byDay.entries()).map(([day, hrv]) => ({ day, hrv }));
   if (points.length < 2) return null;
@@ -564,12 +564,12 @@ function PatternsSection({
 
   const hrvByDate = new Map<string, number>();
   for (const s of ouraData.sleep) {
-    if (s.average_hrv > 0) hrvByDate.set(s.day, s.average_hrv);
+    if (s.average_hrv && s.average_hrv > 0) hrvByDate.set(s.day, s.average_hrv);
   }
 
   const sleepScoreByDate = new Map<string, number>();
   for (const s of ouraData.dailySleep) {
-    if (s.score > 0) sleepScoreByDate.set(s.day, s.score);
+    if (s.score && s.score > 0) sleepScoreByDate.set(s.day, s.score);
   }
 
   const bedtimeByDate = new Map<string, number>();
