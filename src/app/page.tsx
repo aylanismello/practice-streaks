@@ -824,6 +824,178 @@ function TripCountdown({ inline }: { inline?: boolean }) {
   );
 }
 
+interface HistoryMonth {
+  month: string;
+  avgHrv: number | null;
+  avgSleepScore: number | null;
+  avgReadinessScore: number | null;
+  resilience: { exceptional: number; strong: number; solid: number; adequate: number; limited: number };
+  stressBalance: { stressDays: number; recoveryDays: number };
+  totalNights: number;
+}
+
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function YourYear({ months }: { months: HistoryMonth[] }) {
+  if (months.length < 2) return null;
+
+  const first = months[0];
+  const last = months[months.length - 1];
+
+  // --- Dual-axis chart ---
+  const hrvPoints = months.filter((m) => m.avgHrv != null).map((m) => ({ month: m.month, val: m.avgHrv! }));
+  const readinessPoints = months.filter((m) => m.avgReadinessScore != null).map((m) => ({ month: m.month, val: m.avgReadinessScore! }));
+
+  const w = 600;
+  const h = 220;
+  const pad = { top: 14, right: 46, bottom: 30, left: 46 };
+  const plotW = w - pad.left - pad.right;
+  const plotH = h - pad.top - pad.bottom;
+
+  // HRV Y range (left axis)
+  const hrvVals = hrvPoints.map((p) => p.val);
+  const hrvMin = Math.floor(Math.min(...hrvVals) * 0.92);
+  const hrvMax = Math.ceil(Math.max(...hrvVals) * 1.08);
+  const hrvY = (v: number) => pad.top + plotH - ((v - hrvMin) / (hrvMax - hrvMin)) * plotH;
+
+  // Readiness Y range (right axis)
+  const rdnVals = readinessPoints.map((p) => p.val);
+  const rdnMin = Math.floor(Math.min(...rdnVals) * 0.92);
+  const rdnMax = Math.ceil(Math.max(...rdnVals) * 1.08);
+  const rdnY = (v: number) => pad.top + plotH - ((v - rdnMin) / (rdnMax - rdnMin)) * plotH;
+
+  // X scale: map months to positions
+  const allMonths = months.map((m) => m.month);
+  const xScale = (month: string) => {
+    const i = allMonths.indexOf(month);
+    return pad.left + (i / (allMonths.length - 1)) * plotW;
+  };
+
+  const hrvPath = hrvPoints
+    .map((p, i) => `${i === 0 ? "M" : "L"}${xScale(p.month).toFixed(1)},${hrvY(p.val).toFixed(1)}`)
+    .join(" ");
+  const rdnPath = readinessPoints
+    .map((p, i) => `${i === 0 ? "M" : "L"}${xScale(p.month).toFixed(1)},${rdnY(p.val).toFixed(1)}`)
+    .join(" ");
+
+  // Y ticks
+  const hrvTicks = Array.from({ length: 4 }, (_, i) => Math.round(hrvMin + (i / 3) * (hrvMax - hrvMin)));
+  const rdnTicks = Array.from({ length: 4 }, (_, i) => Math.round(rdnMin + (i / 3) * (rdnMax - rdnMin)));
+
+  // X labels
+  const xLabels = allMonths.map((m) => ({
+    month: m,
+    label: MONTH_LABELS[parseInt(m.slice(5, 7), 10) - 1],
+  }));
+
+  // --- Summary calculations ---
+  const hrvDelta = first.avgHrv != null && last.avgHrv != null ? last.avgHrv - first.avgHrv : null;
+  const hrvLabel = hrvDelta != null ? (Math.abs(hrvDelta) <= 3 ? "stable" : hrvDelta > 0 ? "improving" : "declining") : null;
+
+  const sleepDelta = first.avgSleepScore != null && last.avgSleepScore != null ? last.avgSleepScore - first.avgSleepScore : null;
+  const sleepLabel = sleepDelta != null ? (Math.abs(sleepDelta) <= 2 ? "stable" : sleepDelta > 0 ? "improving" : "declining") : null;
+
+  const rdnDelta = first.avgReadinessScore != null && last.avgReadinessScore != null ? last.avgReadinessScore - first.avgReadinessScore : null;
+  const rdnLabel = rdnDelta != null ? (Math.abs(rdnDelta) <= 2 ? "stable" : rdnDelta > 0 ? "improving" : "declining") : null;
+
+  const resTotal = (m: HistoryMonth) => m.resilience.exceptional + m.resilience.strong + m.resilience.solid + m.resilience.adequate + m.resilience.limited;
+  const solidPlus = (m: HistoryMonth) => {
+    const t = resTotal(m);
+    return t > 0 ? Math.round(((m.resilience.exceptional + m.resilience.strong + m.resilience.solid) / t) * 100) : null;
+  };
+  const firstSolidPct = solidPlus(first);
+  const lastSolidPct = solidPlus(last);
+
+  const firstRecoveryPct = (first.stressBalance.recoveryDays + first.stressBalance.stressDays) > 0
+    ? Math.round((first.stressBalance.recoveryDays / (first.stressBalance.recoveryDays + first.stressBalance.stressDays)) * 100)
+    : null;
+  const lastRecoveryPct = (last.stressBalance.recoveryDays + last.stressBalance.stressDays) > 0
+    ? Math.round((last.stressBalance.recoveryDays / (last.stressBalance.recoveryDays + last.stressBalance.stressDays)) * 100)
+    : null;
+
+  const labelColor = (label: string | null) =>
+    label === "improving" ? "#22c55e" : label === "declining" ? "#ef4444" : "#a1a1aa";
+
+  const summaries = [
+    first.avgHrv != null && last.avgHrv != null
+      ? { emoji: "❤️", name: "HRV", text: `${first.avgHrv}ms → ${last.avgHrv}ms`, label: hrvLabel, color: labelColor(hrvLabel) }
+      : null,
+    first.avgSleepScore != null && last.avgSleepScore != null
+      ? { emoji: "😴", name: "Sleep", text: `${first.avgSleepScore} → ${last.avgSleepScore}`, label: sleepLabel, color: labelColor(sleepLabel) }
+      : null,
+    first.avgReadinessScore != null && last.avgReadinessScore != null
+      ? { emoji: "🧠", name: "Readiness", text: `${first.avgReadinessScore} → ${last.avgReadinessScore}`, label: rdnLabel, color: labelColor(rdnLabel) }
+      : null,
+    firstSolidPct != null && lastSolidPct != null
+      ? { emoji: "🛡️", name: "Resilience", text: `${firstSolidPct}% → ${lastSolidPct}% solid+`, label: null, color: "#a1a1aa" }
+      : null,
+    firstRecoveryPct != null && lastRecoveryPct != null
+      ? { emoji: "⚖️", name: "Stress Balance", text: `${firstRecoveryPct}% → ${lastRecoveryPct}% recovery`, label: null, color: "#a1a1aa" }
+      : null,
+  ].filter(Boolean) as { emoji: string; name: string; text: string; label: string | null; color: string }[];
+
+  return (
+    <div className="mt-10">
+      <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
+        Your Year
+      </h2>
+      {/* Dual-axis chart */}
+      <div
+        className="rounded-xl border border-[var(--border)] p-4"
+        style={{ background: "var(--bg-card)" }}
+      >
+        <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 220 }}>
+          {/* Grid lines */}
+          {hrvTicks.map((v) => (
+            <line key={`g-${v}`} x1={pad.left} x2={w - pad.right} y1={hrvY(v)} y2={hrvY(v)} stroke="var(--border)" strokeWidth="1" />
+          ))}
+          {/* Left Y axis labels (HRV) */}
+          {hrvTicks.map((v) => (
+            <text key={`hl-${v}`} x={pad.left - 6} y={hrvY(v) + 4} textAnchor="end" fill="#f59e0b" fontSize="10">{v}</text>
+          ))}
+          {/* Right Y axis labels (Readiness) */}
+          {rdnTicks.map((v) => (
+            <text key={`rl-${v}`} x={w - pad.right + 6} y={rdnY(v) + 4} textAnchor="start" fill="#2dd4bf" fontSize="10">{v}</text>
+          ))}
+          {/* Axis titles */}
+          <text x={pad.left} y={pad.top - 3} textAnchor="start" fill="#f59e0b" fontSize="9" opacity="0.7">HRV (ms)</text>
+          <text x={w - pad.right} y={pad.top - 3} textAnchor="end" fill="#2dd4bf" fontSize="9" opacity="0.7">Readiness</text>
+          {/* HRV line */}
+          <path d={hrvPath} fill="none" stroke="#f59e0b" strokeWidth="2" />
+          {/* Readiness line */}
+          <path d={rdnPath} fill="none" stroke="#2dd4bf" strokeWidth="2" />
+          {/* X labels */}
+          {xLabels.map((l) => (
+            <text key={l.month} x={xScale(l.month)} y={h - 6} textAnchor="middle" fill="var(--text-muted)" fontSize="10">
+              {l.label}
+            </text>
+          ))}
+        </svg>
+      </div>
+
+      {/* Summary cards */}
+      <div className="flex gap-4 mt-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+        {summaries.map((s) => (
+          <div key={s.name} className="flex-shrink-0 text-sm">
+            <span className="mr-1">{s.emoji}</span>
+            <span className="text-[var(--text-muted)]">{s.text}</span>
+            {s.label && (
+              <span className="ml-1.5 text-xs font-medium" style={{ color: s.color }}>
+                · {s.label}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Context line */}
+      <p className="text-xs text-[var(--text-muted)] mt-3 opacity-60">
+        Tracking since May 2025 · {months.length} months of data
+      </p>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [practices, setPractices] = useState<PracticeType[]>([]);
   const [logs, setLogs] = useState<PracticeLog[]>([]);
@@ -833,6 +1005,7 @@ export default function Dashboard() {
   const [viewMode, setViewMode] = useState<ViewMode>("7d");
   const [timeOffset, setTimeOffset] = useState(0);
   const [wotLogs, setWotLogs] = useState<WotEntry[]>([]);
+  const [historyMonths, setHistoryMonths] = useState<HistoryMonth[] | null>(null);
 
   const fetchData = useCallback(async () => {
     const effectiveDate = getEffectiveDate();
@@ -868,6 +1041,12 @@ export default function Dashboard() {
     fetch("/api/wot")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (Array.isArray(data)) setWotLogs(data); })
+      .catch(() => {});
+
+    // Fetch historical Oura data (non-blocking)
+    fetch("/api/oura-history")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data?.months) setHistoryMonths(data.months); })
       .catch(() => {});
   }, []);
 
@@ -1357,6 +1536,8 @@ export default function Dashboard() {
 
       {/* Patterns — practice-to-body correlations */}
       {ouraData && <PatternsSection logs={logs} ouraData={ouraData} />}
+
+      {historyMonths && <YourYear months={historyMonths} />}
 
     </main>
   );
