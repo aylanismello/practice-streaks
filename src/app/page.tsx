@@ -1275,150 +1275,6 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Focusmate section */}
-      {focusmateData && (() => {
-        const TZ = "America/Los_Angeles";
-        const nowPT = new Date(new Date().toLocaleString("en-US", { timeZone: TZ }));
-        const effectiveNow = nowPT.getHours() < 4
-          ? new Date(nowPT.getFullYear(), nowPT.getMonth(), nowPT.getDate() - 1)
-          : nowPT;
-
-        // Week boundaries (Mon–Sun)
-        const dayOfWeek = effectiveNow.getDay(); // 0=Sun
-        const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-        const weekStart = new Date(effectiveNow);
-        weekStart.setDate(weekStart.getDate() - mondayOffset);
-        weekStart.setHours(4, 0, 0, 0);
-
-        const weekDays = Array.from({ length: 7 }, (_, i) => {
-          const d = new Date(weekStart);
-          d.setDate(d.getDate() + i);
-          return formatDateLocal(d);
-        });
-
-        const dayLabels = ["M", "T", "W", "T", "F", "S", "S"];
-
-        // Bucket sessions by date (already Pacific from API)
-        const sessionsByDay = new Map<string, FocusmateSession[]>();
-        for (const s of focusmateData.sessions) {
-          const key = s.date;
-          if (!sessionsByDay.has(key)) sessionsByDay.set(key, []);
-          sessionsByDay.get(key)!.push(s);
-        }
-
-        // Week stats
-        let weekSessions = 0;
-        let weekCompleted = 0;
-        let weekFocusMins = 0;
-        for (const day of weekDays) {
-          const daySessions = sessionsByDay.get(day) || [];
-          weekSessions += daySessions.length;
-          for (const s of daySessions) {
-            if (s.completed) {
-              weekCompleted++;
-              weekFocusMins += s.duration;
-            }
-          }
-        }
-        const weekHours = Math.floor(weekFocusMins / 60);
-        const weekMins = weekFocusMins % 60;
-
-        // Streak: consecutive days with at least one completed session
-        const todayStr = formatDateLocal(effectiveNow);
-        const todayHasSession = (sessionsByDay.get(todayStr) || []).some((s) => s.completed);
-
-        let fmStreak = 0;
-        const streakDate = new Date(effectiveNow);
-        if (!todayHasSession) {
-          streakDate.setDate(streakDate.getDate() - 1);
-        }
-        while (true) {
-          const key = formatDateLocal(streakDate);
-          const daySessions = sessionsByDay.get(key) || [];
-          if (daySessions.some((s) => s.completed)) {
-            fmStreak++;
-            streakDate.setDate(streakDate.getDate() - 1);
-          } else {
-            break;
-          }
-        }
-        const fmAtRisk = fmStreak > 0 && !todayHasSession;
-        const fmBadge = fmStreak >= 7 ? "⭐" : fmStreak >= 3 ? "🔥" : "";
-
-        // Profile
-        const memberSince = focusmateData.profile.memberSince
-          ? new Date(focusmateData.profile.memberSince).toLocaleDateString("en-US", { month: "short", year: "numeric" })
-          : null;
-
-        return (
-          <div className="mb-8 md:mb-10">
-            <div
-              className="rounded-xl p-4"
-              style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-wider">
-                  🎯 Focusmate
-                </div>
-                {fmStreak > 0 && (
-                  <div className={`text-xs ${fmAtRisk ? "text-orange-400" : "text-[var(--text-muted)]"}`}>
-                    {fmStreak}d streak{fmAtRisk ? " ⚠️" : ""}{fmBadge ? ` ${fmBadge}` : ""}
-                  </div>
-                )}
-              </div>
-
-              {/* Week dots */}
-              <div className="flex gap-1.5 mb-3">
-                {weekDays.map((day, i) => {
-                  const daySessions = sessionsByDay.get(day) || [];
-                  const hasCompleted = daySessions.some((s) => s.completed);
-                  const isFuture = day > todayStr;
-                  return (
-                    <div key={day} className="flex-1 text-center">
-                      <div className="text-[10px] text-[var(--text-muted)] mb-1">{dayLabels[i]}</div>
-                      <div
-                        className="w-full aspect-square rounded-md"
-                        style={{
-                          background: isFuture
-                            ? "transparent"
-                            : hasCompleted
-                            ? "var(--accent)"
-                            : "var(--border)",
-                          border: isFuture ? "1px dashed var(--border)" : "none",
-                          opacity: isFuture ? 0.3 : 1,
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Stats row */}
-              <div className="flex items-baseline gap-4 text-sm">
-                <span className="text-[var(--text)]">
-                  <span className="font-medium">{weekCompleted}</span>
-                  {weekCompleted !== weekSessions && (
-                    <span className="text-[var(--text-muted)]">/{weekSessions}</span>
-                  )}
-                  <span className="text-[var(--text-muted)]"> sessions</span>
-                </span>
-                {weekFocusMins > 0 && (
-                  <span className="text-[var(--text-muted)]">
-                    {weekHours > 0 ? `${weekHours}h ` : ""}{weekMins}m focus
-                  </span>
-                )}
-              </div>
-
-              {/* All-time */}
-              {focusmateData.profile.totalSessionCount > 0 && memberSince && (
-                <div className="text-xs text-[var(--text-muted)] mt-2 opacity-60">
-                  {focusmateData.profile.totalSessionCount} sessions since {memberSince}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* History view with time navigation */}
       {(() => {
@@ -1439,6 +1295,15 @@ export default function Dashboard() {
           }
           for (const r of ouraData.resilience) {
             if (r.level) resByDay.set(r.day, r.level);
+          }
+        }
+        // Focusmate sessions by day
+        const focusByDay = new Map<string, number>();
+        if (focusmateData) {
+          for (const s of focusmateData.sessions) {
+            if (s.completed) {
+              focusByDay.set(s.date, (focusByDay.get(s.date) ?? 0) + 1);
+            }
           }
         }
         const hrvVals = Array.from(hrvByDay.values());
@@ -1650,6 +1515,24 @@ export default function Dashboard() {
                             <td key={day} className="text-center py-1.5 px-1">
                               <span className="text-[10px] md:text-xs font-mono tabular-nums" style={{ color }} title={level ?? ""}>
                                 {label}
+                              </span>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    )}
+                    {/* Focusmate row */}
+                    {focusByDay.size > 0 && (
+                      <tr>
+                        <td className="pr-3 py-1.5 whitespace-nowrap">
+                          <span className="text-sm md:text-base">🎯</span>
+                        </td>
+                        {rangeDays.map((day) => {
+                          const count = focusByDay.get(day);
+                          return (
+                            <td key={day} className="text-center py-1.5 px-1">
+                              <span className="text-[10px] md:text-xs font-mono tabular-nums" style={{ color: count ? "#22c55e" : "var(--text-muted)" }}>
+                                {count ?? "–"}
                               </span>
                             </td>
                           );
