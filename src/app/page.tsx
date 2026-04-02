@@ -7,7 +7,10 @@ import {
   getLast7Days,
   formatDisplayDate,
   getDayLabel,
+  getDaysForRange,
+  getRangeLabel,
 } from "@/lib/dates";
+import type { ViewMode } from "@/lib/dates";
 
 interface OuraData {
   sleep: { average_hrv: number; day: string }[];
@@ -410,6 +413,8 @@ export default function Dashboard() {
   const [today, setToday] = useState("");
   const [loading, setLoading] = useState(true);
   const [ouraData, setOuraData] = useState<OuraData | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("7d");
+  const [timeOffset, setTimeOffset] = useState(0);
 
   const fetchData = useCallback(async () => {
     const effectiveDate = getEffectiveDate();
@@ -550,60 +555,189 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Weekly view — redesigned as label + dot matrix */}
-      <div>
-        <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
-          Last 7 Days
-        </h2>
-        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 md:p-5 overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="text-left pb-2 pr-3" />
-                {last7Days.map((day) => (
-                  <th
-                    key={day}
-                    className="text-center text-[10px] md:text-xs text-[var(--text-muted)] pb-2 font-normal px-1"
+      {/* History view with time navigation */}
+      {(() => {
+        const rangeDays = getDaysForRange(today, viewMode, timeOffset);
+        const rangeLabel = getRangeLabel(today, viewMode, timeOffset);
+        const isAtPresent = timeOffset === 0;
+
+        // Month view helpers
+        const monthGrid = viewMode === "month" ? (() => {
+          const first = new Date(rangeDays[0] + "T12:00:00");
+          const startDow = first.getDay(); // 0=Sun
+          const cells: (string | null)[] = [];
+          for (let i = 0; i < startDow; i++) cells.push(null);
+          for (const d of rangeDays) cells.push(d);
+          return cells;
+        })() : [];
+
+        return (
+          <div>
+            {/* Controls row */}
+            <div className="flex items-center justify-between mb-3">
+              {/* View mode pills */}
+              <div className="flex gap-1">
+                {(["7d", "14d", "month"] as ViewMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => { setViewMode(mode); setTimeOffset(0); }}
+                    className="px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors"
+                    style={{
+                      background: viewMode === mode ? "var(--accent)" : "var(--bg-card)",
+                      color: viewMode === mode ? "#000" : "var(--text-muted)",
+                      border: `1px solid ${viewMode === mode ? "var(--accent)" : "var(--border)"}`,
+                    }}
                   >
-                    {getDayLabel(day)}
-                  </th>
+                    {mode === "month" ? "Month" : mode.toUpperCase()}
+                  </button>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {practices.map((practice) => (
-                <tr key={practice.id}>
-                  <td className="pr-3 py-1.5 whitespace-nowrap">
-                    <span className="text-sm md:text-base">{practice.emoji}</span>
-                    <span className="hidden md:inline text-xs text-[var(--text-muted)] ml-1.5">
-                      {practice.name}
-                    </span>
-                  </td>
-                  {last7Days.map((day) => {
-                    const done = logs.some(
-                      (l) =>
-                        l.practice_date === day && l.practice_id === practice.id
-                    );
+              </div>
+
+              {/* Navigation */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setTimeOffset((o) => o + 1)}
+                  className="w-7 h-7 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                  aria-label="Previous period"
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={() => setTimeOffset(0)}
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors min-w-[110px] text-center"
+                  title="Reset to current"
+                >
+                  {rangeLabel}
+                </button>
+                <button
+                  onClick={() => setTimeOffset((o) => Math.max(0, o - 1))}
+                  disabled={isAtPresent}
+                  className="w-7 h-7 flex items-center justify-center rounded-full transition-colors"
+                  style={{
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    color: isAtPresent ? "var(--border)" : "var(--text-muted)",
+                    cursor: isAtPresent ? "default" : "pointer",
+                  }}
+                  aria-label="Next period"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+
+            {/* Dot matrix table (7d / 14d) */}
+            {viewMode !== "month" && (
+              <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 md:p-5 overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="text-left pb-2 pr-3" />
+                      {rangeDays.map((day) => (
+                        <th
+                          key={day}
+                          className="text-center text-[10px] md:text-xs text-[var(--text-muted)] pb-2 font-normal px-1"
+                        >
+                          {getDayLabel(day)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {practices.map((practice) => (
+                      <tr key={practice.id}>
+                        <td className="pr-3 py-1.5 whitespace-nowrap">
+                          <span className="text-sm md:text-base">{practice.emoji}</span>
+                          <span className="hidden md:inline text-xs text-[var(--text-muted)] ml-1.5">
+                            {practice.name}
+                          </span>
+                        </td>
+                        {rangeDays.map((day) => {
+                          const done = logs.some(
+                            (l) =>
+                              l.practice_date === day && l.practice_id === practice.id
+                          );
+                          return (
+                            <td key={day} className="text-center py-1.5 px-1">
+                              <span
+                                className="inline-block w-5 h-5 md:w-6 md:h-6 rounded-full"
+                                style={{
+                                  background: done ? "var(--accent)" : "transparent",
+                                  border: done ? "none" : "2px solid var(--border)",
+                                  opacity: done ? 1 : 0.5,
+                                }}
+                                title={`${practice.name} - ${day}`}
+                              />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Month calendar grid */}
+            {viewMode === "month" && (
+              <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 md:p-5">
+                {/* Day-of-week headers */}
+                <div className="grid grid-cols-7 gap-1 mb-1">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                    <div key={d} className="text-center text-[10px] text-[var(--text-muted)] py-1">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+                {/* Calendar cells */}
+                <div className="grid grid-cols-7 gap-1">
+                  {monthGrid.map((day, i) => {
+                    if (!day) {
+                      return <div key={`empty-${i}`} />;
+                    }
+                    const dayLogs = logs.filter((l) => l.practice_date === day);
+                    const doneCount = new Set(dayLogs.map((l) => l.practice_id)).size;
+                    const total = practices.length;
+                    const ratio = total > 0 ? doneCount / total : 0;
+                    const dayNum = parseInt(day.slice(8, 10));
+                    const isToday = day === today;
+                    const opacity = ratio === 0 ? 0 : ratio < 0.5 ? 0.3 : ratio < 1 ? 0.6 : 1;
+
                     return (
-                      <td key={day} className="text-center py-1.5 px-1">
-                        <span
-                          className="inline-block w-5 h-5 md:w-6 md:h-6 rounded-full"
-                          style={{
-                            background: done ? "var(--accent)" : "transparent",
-                            border: done ? "none" : "2px solid var(--border)",
-                            opacity: done ? 1 : 0.5,
-                          }}
-                          title={`${practice.name} - ${day}`}
-                        />
-                      </td>
+                      <div
+                        key={day}
+                        className="relative aspect-square flex flex-col items-center justify-center rounded-lg transition-colors"
+                        style={{
+                          border: isToday ? "1px solid var(--accent)" : "1px solid transparent",
+                        }}
+                        title={doneCount > 0 ? `${doneCount}/${total} practices` : day}
+                      >
+                        <span className="text-[11px] md:text-xs text-[var(--text-muted)]">{dayNum}</span>
+                        {doneCount > 0 && (
+                          <div
+                            className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full mt-0.5"
+                            style={{
+                              background: "var(--accent)",
+                              opacity,
+                            }}
+                          />
+                        )}
+                        {doneCount === 0 && (
+                          <div
+                            className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full mt-0.5"
+                            style={{ border: "1px solid var(--border)", opacity: 0.3 }}
+                          />
+                        )}
+                      </div>
                     );
                   })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* North Star Metrics */}
       {ouraData && today && (() => {

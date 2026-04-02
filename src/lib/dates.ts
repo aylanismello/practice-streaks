@@ -45,3 +45,52 @@ export function getDayLabel(dateStr: string): string {
   const d = new Date(dateStr + "T12:00:00");
   return d.toLocaleDateString("en-US", { weekday: "short" });
 }
+
+export type ViewMode = "7d" | "14d" | "month";
+
+export function getDaysForRange(
+  today: string,
+  mode: ViewMode,
+  offset: number
+): string[] {
+  const d = new Date(today + "T12:00:00");
+
+  if (mode === "month") {
+    d.setMonth(d.getMonth() - offset);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days: string[] = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(formatDate(new Date(year, month, i)));
+    }
+    return days;
+  }
+
+  const count = mode === "7d" ? 7 : 14;
+  d.setDate(d.getDate() - offset * count);
+  const days: string[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const date = new Date(d);
+    date.setDate(date.getDate() - i);
+    days.push(formatDate(date));
+  }
+  return days;
+}
+
+export function getRangeLabel(
+  today: string,
+  mode: ViewMode,
+  offset: number
+): string {
+  const days = getDaysForRange(today, mode, offset);
+  if (mode === "month") {
+    const d = new Date(days[0] + "T12:00:00");
+    return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
+  const first = new Date(days[0] + "T12:00:00");
+  const last = new Date(days[days.length - 1] + "T12:00:00");
+  const fmtFirst = first.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const fmtLast = last.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${fmtFirst} – ${fmtLast}`;
+}
