@@ -926,7 +926,7 @@ export default function Dashboard() {
       <TonightCard logs={logs} practices={practices} today={today} />
 
       {/* Practice cards */}
-      <div className="grid grid-cols-3 md:grid-cols-4 gap-2 md:gap-3 mb-8 md:mb-10">
+      <div className="grid grid-cols-4 gap-2 md:gap-3 mb-8 md:mb-10">
         {practices.map((practice, i) => {
           const done = todayLogs.has(practice.id);
           const { count: streak, doneToday } = calculateStreak(practice.id, logs, today);
