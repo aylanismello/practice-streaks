@@ -837,10 +837,11 @@ interface HistoryMonth {
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function YourYear({ months }: { months: HistoryMonth[] }) {
-  if (months.length < 2) return null;
+  if (months.length < 3) return null;
 
-  const first = months[0];
-  const last = months[months.length - 1];
+  // Skip partial first/last months — use first and last COMPLETE months
+  const first = months.length > 2 ? months[1] : months[0];
+  const last = months.length > 2 ? months[months.length - 2] : months[months.length - 1];
 
   // --- Dual-axis chart ---
   const hrvPoints = months.filter((m) => m.avgHrv != null).map((m) => ({ month: m.month, val: m.avgHrv! }));
