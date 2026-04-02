@@ -13,6 +13,7 @@ import {
 import type { ViewMode } from "@/lib/dates";
 
 const TARGET_BEDTIME = "23:00"; // 11:00 PM Pacific — TODO: read from supabase
+const TRACKING_START = "2026-03-21"; // First day practices were logged
 
 interface OuraData {
   sleep: { average_hrv: number | null; day: string; bedtime_start: string | null }[];
@@ -160,20 +161,16 @@ function ResilienceCard({
 
 function ConsistencyLine({
   days,
-  prevDays,
+  totalDays,
 }: {
   days: number;
-  prevDays: number | null;
+  totalDays: number;
 }) {
-  const delta = prevDays !== null ? days - prevDays : null;
+  const pct = totalDays > 0 ? Math.round((days / totalDays) * 100) : 0;
   return (
     <div className="mt-2 text-center text-xs text-[var(--text-muted)]">
-      Practiced <span className="text-[var(--text)] font-medium">{days}</span> of last 30 days
-      {delta !== null && (
-        <span className={delta >= 0 ? " text-green-400" : " text-amber-400"}>
-          {" · "}{delta === 0 ? "same as" : delta > 0 ? `+${delta} vs` : `${delta} vs`} prior 30d
-        </span>
-      )}
+      Practiced <span className="text-[var(--text)] font-medium">{days}</span> of {totalDays} tracked days
+      <span className="text-[var(--text-muted)]"> · {pct}%</span>
     </div>
   );
 }
@@ -1340,10 +1337,17 @@ export default function Dashboard() {
               <ResilienceCard distribution={currDist} prevStrongSolidPct={prevStrongSolidPct} />
               <StressBalanceCard stressData={currStress} />
             </div>
-            <ConsistencyLine
-              days={currDaysWithPractice}
-              prevDays={prevDaysWithPractice > 0 ? prevDaysWithPractice : null}
-            />
+            {(() => {
+              // Only count days since tracking started
+              const trackStart = new Date(TRACKING_START + "T12:00:00");
+              const windowStart = new Date(currStart + "T12:00:00");
+              const windowEnd = new Date(currEnd + "T12:00:00");
+              const effectiveStart = trackStart > windowStart ? trackStart : windowStart;
+              const totalDays = effectiveStart <= windowEnd
+                ? Math.round((windowEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                : 0;
+              return <ConsistencyLine days={currDaysWithPractice} totalDays={totalDays} />;
+            })()}
           </div>
         );
       })()}
