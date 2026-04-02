@@ -479,21 +479,17 @@ export default function Dashboard() {
 
   return (
     <main className="max-w-[960px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-12">
-      {/* Header with countdown on desktop */}
+      {/* Header with countdown */}
       <div className="flex items-start justify-between mb-6 md:mb-8">
-        <div className="flex-1" />
-        <div className="text-center">
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-1">
-            Practice Streaks
+        <div className="flex-1">
+          <h1 className="text-xl md:text-3xl font-semibold tracking-tight mb-0.5 md:mb-1">
+            A.F.M&apos;s Practice
           </h1>
-          <p className="text-[var(--text-muted)] text-sm md:text-base">
+          <p className="text-[var(--text-muted)] text-xs md:text-base">
             {formatDisplayDate(today)}
           </p>
         </div>
-        <div className="flex-1 hidden md:flex justify-end">
-          <TripCountdown inline />
-        </div>
-        <div className="flex-1 md:hidden" />
+        <TripCountdown inline />
       </div>
 
       {/* Progress bar */}
@@ -668,10 +664,7 @@ export default function Dashboard() {
       {/* HRV Trend Chart */}
       {ouraData && <HrvChart data={ouraData.sleep} />}
 
-      {/* Trip countdown — mobile only (desktop shows it top-right) */}
-      <div className="md:hidden">
-        <TripCountdown />
-      </div>
+
     </main>
   );
 }
