@@ -899,12 +899,12 @@ function YourYear({ months }: { months: HistoryMonth[] }) {
   const rdnLabel = rdnDelta != null ? (Math.abs(rdnDelta) <= 2 ? "stable" : rdnDelta > 0 ? "improving" : "declining") : null;
 
   const resTotal = (m: HistoryMonth) => m.resilience.exceptional + m.resilience.strong + m.resilience.solid + m.resilience.adequate + m.resilience.limited;
-  const solidPlus = (m: HistoryMonth) => {
+  const strongPct = (m: HistoryMonth) => {
     const t = resTotal(m);
-    return t > 0 ? Math.round(((m.resilience.exceptional + m.resilience.strong + m.resilience.solid) / t) * 100) : null;
+    return t > 0 ? Math.round(((m.resilience.exceptional + m.resilience.strong) / t) * 100) : null;
   };
-  const firstSolidPct = solidPlus(first);
-  const lastSolidPct = solidPlus(last);
+  const firstStrongPct = strongPct(first);
+  const lastStrongPct = strongPct(last);
 
   const firstRecoveryPct = (first.stressBalance.recoveryDays + first.stressBalance.stressDays) > 0
     ? Math.round((first.stressBalance.recoveryDays / (first.stressBalance.recoveryDays + first.stressBalance.stressDays)) * 100)
@@ -924,10 +924,10 @@ function YourYear({ months }: { months: HistoryMonth[] }) {
       ? { emoji: "😴", name: "Sleep", text: `${first.avgSleepScore} → ${last.avgSleepScore}`, label: sleepLabel, color: labelColor(sleepLabel) }
       : null,
     first.avgReadinessScore != null && last.avgReadinessScore != null
-      ? { emoji: "🧠", name: "Readiness", text: `${first.avgReadinessScore} → ${last.avgReadinessScore}`, label: rdnLabel, color: labelColor(rdnLabel) }
+      ? { emoji: "💪", name: "Readiness", text: `${first.avgReadinessScore} → ${last.avgReadinessScore}`, label: rdnLabel, color: labelColor(rdnLabel) }
       : null,
-    firstSolidPct != null && lastSolidPct != null
-      ? { emoji: "🛡️", name: "Resilience", text: `${firstSolidPct}% → ${lastSolidPct}% solid+`, label: null, color: "#a1a1aa" }
+    firstStrongPct != null && lastStrongPct != null
+      ? { emoji: "🛡️", name: "Resilience", text: `${firstStrongPct}% → ${lastStrongPct}% strong`, label: null, color: "#a1a1aa" }
       : null,
     firstRecoveryPct != null && lastRecoveryPct != null
       ? { emoji: "⚖️", name: "Stress Balance", text: `${firstRecoveryPct}% → ${lastRecoveryPct}% recovery`, label: null, color: "#a1a1aa" }
