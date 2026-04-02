@@ -8,6 +8,7 @@ const OURA_BASE = "https://api.ouraring.com/v2/usercollection";
 interface OuraSleepEntry {
   average_hrv: number;
   day: string;
+  bedtime_start: string;
 }
 
 interface OuraReadinessEntry {
@@ -62,7 +63,7 @@ export async function GET() {
     ]);
 
     const response = NextResponse.json({
-      sleep: sleep.map((s) => ({ average_hrv: s.average_hrv, day: s.day })),
+      sleep: sleep.map((s) => ({ average_hrv: s.average_hrv, day: s.day, bedtime_start: s.bedtime_start })),
       readiness: readiness.map((r) => ({ score: r.score, day: r.day })),
       resilience: resilience.map((r) => ({ level: r.level, day: r.day })),
       dailySleep: dailySleep.map((s) => ({ score: s.score, day: s.day })),

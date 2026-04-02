@@ -12,8 +12,10 @@ import {
 } from "@/lib/dates";
 import type { ViewMode } from "@/lib/dates";
 
+const TARGET_BEDTIME = "01:00"; // 1:00 AM Pacific — easy to change later
+
 interface OuraData {
-  sleep: { average_hrv: number; day: string }[];
+  sleep: { average_hrv: number; day: string; bedtime_start: string }[];
   readiness: { score: number; day: string }[];
   resilience: { level: string; day: string }[];
   dailySleep: { score: number; day: string }[];
@@ -226,12 +228,106 @@ function ConsistencyCard({
   );
 }
 
-function WindowCard() {
+
+function parseBedtimeMinutes(iso: string): number | null {
+  // bedtime_start is like "2026-04-01T00:40:27-07:00"
+  const match = iso.match(/T(\d{2}):(\d{2})/);
+  if (!match) return null;
+  const hours = parseInt(match[1]);
+  const minutes = parseInt(match[2]);
+  return hours * 60 + minutes;
+}
+
+function getTargetMinutes(target: string): number {
+  const [h, m] = target.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function bedtimeDeltaMinutes(actualMinutes: number, targetMinutes: number): number {
+  // Normalize around midnight: times from 6PM-midnight are "before midnight" (negative offset),
+  // times from midnight-noon are "after midnight" (positive offset)
+  // This way 11:30 PM = -30, 1:00 AM = 60, etc.
+  const normalize = (m: number) => (m >= 18 * 60 ? m - 24 * 60 : m);
+  return normalize(actualMinutes) - normalize(targetMinutes);
+}
+
+function formatTime12h(minutes: number): string {
+  const h = Math.floor(minutes / 60) % 24;
+  const m = minutes % 60;
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+function bedtimeColor(deltaMin: number): string {
+  const abs = Math.abs(deltaMin);
+  if (deltaMin <= 0 || abs <= 15) return "text-green-400";
+  if (abs <= 45) return "text-amber-400";
+  return "text-red-400";
+}
+
+function bedtimeDotColor(deltaMin: number): string {
+  const abs = Math.abs(deltaMin);
+  if (deltaMin <= 0 || abs <= 15) return "#4ade80";
+  if (abs <= 45) return "#fbbf24";
+  return "#f87171";
+}
+
+function BedtimeCard({ sleepData, today }: { sleepData: OuraData["sleep"]; today: string }) {
+  const targetMin = getTargetMinutes(TARGET_BEDTIME);
+
+  // Get the most recent entry with a bedtime_start
+  const sorted = [...sleepData]
+    .filter((s) => s.bedtime_start)
+    .sort((a, b) => b.day.localeCompare(a.day));
+  const latest = sorted[0];
+
+  if (!latest) return null;
+
+  const actualMin = parseBedtimeMinutes(latest.bedtime_start);
+  if (actualMin === null) return null;
+
+  const delta = bedtimeDeltaMinutes(actualMin, targetMin);
+  const absMin = Math.abs(delta);
+  const colorClass = bedtimeColor(delta);
+
+  let deltaLabel: string;
+  if (absMin <= 15) {
+    deltaLabel = "on time";
+  } else if (delta > 0) {
+    deltaLabel = `+${absMin} min late`;
+  } else {
+    deltaLabel = `${absMin} min early`;
+  }
+
+  // 7-day dots
+  const last7 = sorted.slice(0, 7).reverse();
+
   return (
-    <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", opacity: 0.6 }}>
-      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Window of Tolerance</div>
-      <div className="text-2xl font-bold text-[var(--text-muted)]">—</div>
-      <div className="text-xs mt-1 text-[var(--text-muted)]">Weekly check-in</div>
+    <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Bedtime</div>
+      <div className="flex items-baseline gap-2 mb-1">
+        <span className="text-2xl font-bold text-amber-400">{formatTime12h(actualMin)}</span>
+        <span className="text-[10px] text-[var(--text-muted)]">target {formatTime12h(targetMin)}</span>
+      </div>
+      <div className={`text-xs mb-3 ${colorClass}`}>{deltaLabel}</div>
+      {/* 7-day dots */}
+      <div className="flex gap-1.5 items-center">
+        {last7.map((s) => {
+          const m = parseBedtimeMinutes(s.bedtime_start);
+          if (m === null) return null;
+          const d = bedtimeDeltaMinutes(m, targetMin);
+          return (
+            <div
+              key={s.day}
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: bedtimeDotColor(d) }}
+              title={`${s.day}: ${formatTime12h(m)}`}
+            />
+          );
+        })}
+        <span className="text-[9px] text-[var(--text-muted)] ml-1">7d</span>
+      </div>
     </div>
   );
 }
@@ -782,7 +878,7 @@ export default function Dashboard() {
             </h2>
             <div className="grid grid-cols-2 gap-3">
               <HrvCard avg={avgHrv} delta={hrvDelta} />
-              <WindowCard />
+              <BedtimeCard sleepData={ouraData.sleep} today={today} />
               <ResilienceCard distribution={currDist} prevStrongSolidPct={prevStrongSolidPct} />
               <ConsistencyCard
                 days={currDaysWithPractice}
