@@ -12,7 +12,7 @@ import {
 } from "@/lib/dates";
 import type { ViewMode } from "@/lib/dates";
 
-const TARGET_BEDTIME = "01:00"; // 1:00 AM Pacific — easy to change later
+const TARGET_BEDTIME = "23:00"; // 11:00 PM Pacific — TODO: read from supabase
 
 interface OuraData {
   sleep: { average_hrv: number; day: string; bedtime_start: string }[];
