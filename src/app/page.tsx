@@ -977,12 +977,16 @@ export default function Dashboard() {
         // HRV and sleep score lookup maps for table rows
         const hrvByDay = new Map<string, number>();
         const sleepByDay = new Map<string, number>();
+        const resByDay = new Map<string, string>();
         if (ouraData) {
           for (const s of ouraData.sleep) {
             if (s.average_hrv && s.average_hrv > 0) hrvByDay.set(s.day, s.average_hrv);
           }
           for (const s of ouraData.dailySleep) {
             if (s.score && s.score > 0) sleepByDay.set(s.day, s.score);
+          }
+          for (const r of ouraData.resilience) {
+            if (r.level) resByDay.set(r.day, r.level);
           }
         }
         const hrvVals = Array.from(hrvByDay.values());
@@ -1166,6 +1170,34 @@ export default function Dashboard() {
                             <td key={day} className="text-center py-1.5 px-1">
                               <span className="text-[10px] md:text-xs font-mono tabular-nums" style={{ color }}>
                                 {score != null ? score : "–"}
+                              </span>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    )}
+                    {/* Resilience row */}
+                    {resByDay.size > 0 && (
+                      <tr>
+                        <td className="pr-3 py-1.5 whitespace-nowrap">
+                          <span className="text-sm md:text-base">🛡️</span>
+                        </td>
+                        {rangeDays.map((day) => {
+                          const level = resByDay.get(day);
+                          let color = "var(--text-muted)";
+                          let label = "–";
+                          if (level) {
+                            if (level === "exceptional") { color = "#eab308"; label = "E"; }
+                            else if (level === "strong") { color = "#22c55e"; label = "S+"; }
+                            else if (level === "solid") { color = "#22c55e"; label = "S"; }
+                            else if (level === "adequate") { color = "#eab308"; label = "A"; }
+                            else if (level === "limited") { color = "#ef4444"; label = "L"; }
+                            else { label = level[0].toUpperCase(); }
+                          }
+                          return (
+                            <td key={day} className="text-center py-1.5 px-1">
+                              <span className="text-[10px] md:text-xs font-mono tabular-nums" style={{ color }} title={level ?? ""}>
+                                {label}
                               </span>
                             </td>
                           );
