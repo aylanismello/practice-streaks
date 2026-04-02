@@ -1531,9 +1531,16 @@ export default function Dashboard() {
                           const count = focusByDay.get(day);
                           return (
                             <td key={day} className="text-center py-1.5 px-1">
-                              <span className="text-[10px] md:text-xs font-mono tabular-nums" style={{ color: count ? "#22c55e" : "var(--text-muted)" }}>
-                                {count ?? "–"}
-                              </span>
+                              {count ? (
+                                <span className="relative inline-block">
+                                  <span className="text-base">🎯</span>
+                                  {count > 1 && (
+                                    <span className="absolute -top-1 -right-2 text-[9px] font-bold text-green-400">{count}</span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-[var(--text-muted)]">–</span>
+                              )}
                             </td>
                           );
                         })}
