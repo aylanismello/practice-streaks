@@ -15,7 +15,7 @@ import type { ViewMode } from "@/lib/dates";
 const TARGET_BEDTIME = "23:00"; // 11:00 PM Pacific — TODO: read from supabase
 
 interface OuraData {
-  sleep: { average_hrv: number; day: string; bedtime_start: string | null }[];
+  sleep: { average_hrv: number | null; day: string; bedtime_start: string | null }[];
   readiness: { score: number; day: string }[];
   resilience: { level: string; day: string }[];
   dailySleep: { score: number; day: string }[];
@@ -98,7 +98,7 @@ function HrvCard({ avg, delta }: { avg: number; delta: number | null }) {
   const labelColor = isStable ? "text-green-400" : "text-amber-400";
   return (
     <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">HRV · 30d avg</div>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">❤️ HRV · 30d avg</div>
       <div className="text-2xl font-bold text-amber-400">
         {Math.round(avg)}<span className="text-sm font-normal text-[var(--text-muted)] ml-0.5">ms</span>
       </div>
@@ -354,7 +354,7 @@ function BedtimeCard({ sleepData, today, logs, practices }: { sleepData: OuraDat
   );
 }
 
-function HrvChart({ data }: { data: { average_hrv: number; day: string }[] }) {
+function HrvChart({ data }: { data: { average_hrv: number | null; day: string }[] }) {
   if (data.length === 0) return null;
 
   const sorted = [...data].sort((a, b) => a.day.localeCompare(b.day));
@@ -400,7 +400,7 @@ function HrvChart({ data }: { data: { average_hrv: number; day: string }[] }) {
   return (
     <div className="mt-8">
       <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
-        HRV — Last 90 Days
+        ❤️ HRV — Last 90 Days
       </h2>
       <div
         className="rounded-xl border border-[var(--border)] p-4"
@@ -1270,8 +1270,8 @@ export default function Dashboard() {
           items.filter((i) => i.day >= start && i.day <= end);
 
         // HRV
-        const currHrvVals = inRange(ouraData.sleep, currStart, currEnd).map((s) => s.average_hrv).filter((v) => v > 0);
-        const prevHrvVals = inRange(ouraData.sleep, prevStart, prevEnd).map((s) => s.average_hrv).filter((v) => v > 0);
+        const currHrvVals = inRange(ouraData.sleep, currStart, currEnd).map((s) => s.average_hrv).filter((v): v is number => v != null && v > 0);
+        const prevHrvVals = inRange(ouraData.sleep, prevStart, prevEnd).map((s) => s.average_hrv).filter((v): v is number => v != null && v > 0);
         const avgHrv = currHrvVals.length > 0 ? currHrvVals.reduce((a, b) => a + b, 0) / currHrvVals.length : 0;
         const prevAvgHrv = prevHrvVals.length > 0 ? prevHrvVals.reduce((a, b) => a + b, 0) / prevHrvVals.length : 0;
         const hrvDelta = prevAvgHrv > 0 ? avgHrv - prevAvgHrv : null;
