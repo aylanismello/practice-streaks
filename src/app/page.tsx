@@ -974,6 +974,20 @@ export default function Dashboard() {
         const rangeLabel = getRangeLabel(today, viewMode, timeOffset);
         const isAtPresent = timeOffset === 0;
 
+        // HRV and sleep score lookup maps for table rows
+        const hrvByDay = new Map<string, number>();
+        const sleepByDay = new Map<string, number>();
+        if (ouraData) {
+          for (const s of ouraData.sleep) {
+            if (s.average_hrv && s.average_hrv > 0) hrvByDay.set(s.day, s.average_hrv);
+          }
+          for (const s of ouraData.dailySleep) {
+            if (s.score && s.score > 0) sleepByDay.set(s.day, s.score);
+          }
+        }
+        const hrvVals = Array.from(hrvByDay.values());
+        const hrv30dAvg = hrvVals.length > 0 ? hrvVals.reduce((a, b) => a + b, 0) / hrvVals.length : null;
+
         // Month view helpers
         const monthGrid = viewMode === "month" ? (() => {
           const first = new Date(rangeDays[0] + "T12:00:00");
@@ -1106,6 +1120,53 @@ export default function Dashboard() {
                                   title={`WOT: ${wot.color}`}
                                 />
                               ) : null}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    )}
+                    {/* HRV row */}
+                    {hrvByDay.size > 0 && (
+                      <tr>
+                        <td className="pr-3 py-1.5 whitespace-nowrap">
+                          <span className="text-sm md:text-base">❤️</span>
+                        </td>
+                        {rangeDays.map((day) => {
+                          const hrv = hrvByDay.get(day);
+                          let color = "var(--text-muted)";
+                          if (hrv != null && hrv30dAvg != null) {
+                            const diff = hrv - hrv30dAvg;
+                            if (diff > 5) color = "#22c55e";
+                            else if (diff < -5) color = "#eab308";
+                          }
+                          return (
+                            <td key={day} className="text-center py-1.5 px-1">
+                              <span className="text-[10px] md:text-xs font-mono tabular-nums" style={{ color }}>
+                                {hrv != null ? hrv : "–"}
+                              </span>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    )}
+                    {/* Sleep score row */}
+                    {sleepByDay.size > 0 && (
+                      <tr>
+                        <td className="pr-3 py-1.5 whitespace-nowrap">
+                          <span className="text-sm md:text-base">😴</span>
+                        </td>
+                        {rangeDays.map((day) => {
+                          const score = sleepByDay.get(day);
+                          let color = "var(--text-muted)";
+                          if (score != null) {
+                            if (score >= 80) color = "#22c55e";
+                            else if (score < 60) color = "#eab308";
+                          }
+                          return (
+                            <td key={day} className="text-center py-1.5 px-1">
+                              <span className="text-[10px] md:text-xs font-mono tabular-nums" style={{ color }}>
+                                {score != null ? score : "–"}
+                              </span>
                             </td>
                           );
                         })}
