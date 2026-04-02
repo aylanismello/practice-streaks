@@ -33,6 +33,11 @@ interface PracticeLog {
   practice_id: string;
 }
 
+interface WotEntry {
+  date: string;
+  color: "green" | "yellow" | "red";
+}
+
 function calculateStreak(
   practiceId: string,
   logs: PracticeLog[],
@@ -275,29 +280,57 @@ function bedtimeDotColor(deltaMin: number): string {
 
 function BedtimeCard({ sleepData, today }: { sleepData: OuraData["sleep"]; today: string }) {
   const targetMin = getTargetMinutes(TARGET_BEDTIME);
+  const [now, setNow] = useState(() => new Date());
 
-  // Get the most recent entry with a bedtime_start
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Tonight's countdown
+  const nowPT = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+  const nowMinutes = nowPT.getHours() * 60 + nowPT.getMinutes();
+  // Target is after midnight (e.g. 1:00 AM = 60 min). If current time is afternoon/evening,
+  // bedtime is tonight (hours away). If it's early morning past target, we're past bedtime.
+  const normalizeNow = nowMinutes >= 18 * 60 ? nowMinutes - 24 * 60 : nowMinutes;
+  const normalizeTarget = targetMin >= 18 * 60 ? targetMin - 24 * 60 : targetMin;
+  const minutesUntil = normalizeTarget - normalizeNow;
+
+  let countdownLabel: string;
+  let countdownColor: string;
+  if (minutesUntil > 0) {
+    const h = Math.floor(minutesUntil / 60);
+    const m = minutesUntil % 60;
+    countdownLabel = h > 0 ? `${h}h ${m}m until bedtime` : `${m}m until bedtime`;
+    countdownColor = "text-green-400";
+  } else {
+    const pastMin = Math.abs(minutesUntil);
+    const h = Math.floor(pastMin / 60);
+    const m = pastMin % 60;
+    countdownLabel = h > 0 ? `+${h}h ${m}m past bedtime` : `+${m}m past bedtime`;
+    countdownColor = pastMin > 45 ? "text-red-400" : "text-amber-400";
+  }
+
+  // Last night's actual bedtime from Oura
   const sorted = [...sleepData]
     .filter((s) => s.bedtime_start)
     .sort((a, b) => b.day.localeCompare(a.day));
   const latest = sorted[0];
 
-  if (!latest) return null;
+  const actualMin = latest ? parseBedtimeMinutes(latest.bedtime_start) : null;
+  const lastNightDelta = actualMin !== null ? bedtimeDeltaMinutes(actualMin, targetMin) : null;
+  const lastNightAbsMin = lastNightDelta !== null ? Math.abs(lastNightDelta) : null;
+  const lastNightColorClass = lastNightDelta !== null ? bedtimeColor(lastNightDelta) : "";
 
-  const actualMin = parseBedtimeMinutes(latest.bedtime_start);
-  if (actualMin === null) return null;
-
-  const delta = bedtimeDeltaMinutes(actualMin, targetMin);
-  const absMin = Math.abs(delta);
-  const colorClass = bedtimeColor(delta);
-
-  let deltaLabel: string;
-  if (absMin <= 15) {
-    deltaLabel = "on time";
-  } else if (delta > 0) {
-    deltaLabel = `+${absMin} min late`;
-  } else {
-    deltaLabel = `${absMin} min early`;
+  let lastNightDeltaLabel: string | null = null;
+  if (lastNightDelta !== null && lastNightAbsMin !== null) {
+    if (lastNightAbsMin <= 15) {
+      lastNightDeltaLabel = "on time";
+    } else if (lastNightDelta > 0) {
+      lastNightDeltaLabel = `+${lastNightAbsMin}m late`;
+    } else {
+      lastNightDeltaLabel = `${lastNightAbsMin}m early`;
+    }
   }
 
   // 7-day dots
@@ -306,13 +339,19 @@ function BedtimeCard({ sleepData, today }: { sleepData: OuraData["sleep"]; today
   return (
     <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
       <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Bedtime</div>
-      <div className="flex items-baseline gap-2 mb-1">
-        <span className="text-2xl font-bold text-amber-400">{formatTime12h(actualMin)}</span>
-        <span className="text-[10px] text-[var(--text-muted)]">target {formatTime12h(targetMin)}</span>
-      </div>
-      <div className={`text-xs mb-3 ${colorClass}`}>{deltaLabel}</div>
+      <div className="text-xs text-[var(--text-muted)] mb-1">Target: {formatTime12h(targetMin)}</div>
+      <div className={`text-sm font-medium mb-2 ${countdownColor}`}>{countdownLabel}</div>
+      {actualMin !== null && (
+        <div className="flex items-baseline gap-2 mb-1">
+          <span className="text-lg font-bold text-amber-400">{formatTime12h(actualMin)}</span>
+          <span className="text-[10px] text-[var(--text-muted)]">last night</span>
+          {lastNightDeltaLabel && (
+            <span className={`text-[10px] ${lastNightColorClass}`}>{lastNightDeltaLabel}</span>
+          )}
+        </div>
+      )}
       {/* 7-day dots */}
-      <div className="flex gap-1.5 items-center">
+      <div className="flex gap-1.5 items-center mt-2">
         {last7.map((s) => {
           const m = parseBedtimeMinutes(s.bedtime_start);
           if (m === null) return null;
@@ -511,6 +550,7 @@ export default function Dashboard() {
   const [ouraData, setOuraData] = useState<OuraData | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("7d");
   const [timeOffset, setTimeOffset] = useState(0);
+  const [wotLogs, setWotLogs] = useState<WotEntry[]>([]);
 
   const fetchData = useCallback(async () => {
     const effectiveDate = getEffectiveDate();
@@ -540,6 +580,12 @@ export default function Dashboard() {
     fetch("/api/oura")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data && !data.error) setOuraData(data); })
+      .catch(() => {});
+
+    // Fetch WOT logs (non-blocking)
+    fetch("/api/wot")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (Array.isArray(data)) setWotLogs(data); })
       .catch(() => {});
   }, []);
 
@@ -770,6 +816,30 @@ export default function Dashboard() {
                         })}
                       </tr>
                     ))}
+                    {/* WOT row */}
+                    {wotLogs.length > 0 && (
+                      <tr>
+                        <td className="pr-3 py-1.5 whitespace-nowrap">
+                          <span className="text-sm md:text-base">🧠</span>
+                          <span className="hidden md:inline text-xs text-[var(--text-muted)] ml-1.5">WOT</span>
+                        </td>
+                        {rangeDays.map((day) => {
+                          const wot = wotLogs.find((w) => w.date === day);
+                          const wotColors: Record<string, string> = { green: "#4ade80", yellow: "#fbbf24", red: "#f87171" };
+                          return (
+                            <td key={day} className="text-center py-1.5 px-1">
+                              {wot ? (
+                                <span
+                                  className="inline-block w-[6px] h-[6px] rounded-full"
+                                  style={{ backgroundColor: wotColors[wot.color] }}
+                                  title={`WOT: ${wot.color}`}
+                                />
+                              ) : null}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -825,6 +895,18 @@ export default function Dashboard() {
                             style={{ border: "1px solid var(--border)", opacity: 0.3 }}
                           />
                         )}
+                        {(() => {
+                          const wot = wotLogs.find((w) => w.date === day);
+                          if (!wot) return null;
+                          const wotColors: Record<string, string> = { green: "#4ade80", yellow: "#fbbf24", red: "#f87171" };
+                          return (
+                            <div
+                              className="w-[6px] h-[6px] rounded-full mt-0.5"
+                              style={{ backgroundColor: wotColors[wot.color] }}
+                              title={`WOT: ${wot.color}`}
+                            />
+                          );
+                        })()}
                       </div>
                     );
                   })}
