@@ -40,6 +40,20 @@ interface WotEntry {
   color: "green" | "yellow" | "red";
 }
 
+interface FocusmateSession {
+  startTime: string;
+  duration: number;
+  completed: boolean;
+}
+
+interface FocusmateData {
+  sessions: FocusmateSession[];
+  profile: {
+    totalSessionCount: number;
+    memberSince: string;
+  };
+}
+
 function calculateStreak(
   practiceId: string,
   logs: PracticeLog[],
@@ -836,16 +850,95 @@ interface HistoryMonth {
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function YourYear({ months }: { months: HistoryMonth[] }) {
+type YearView = "year" | "quarter" | "month";
+
+function YourYear({ months, ouraData }: { months: HistoryMonth[]; ouraData: OuraData | null }) {
+  const [view, setView] = useState<YearView>("year");
+
   if (months.length < 3) return null;
 
   // Skip partial first/last months — use first and last COMPLETE months
   const first = months.length > 2 ? months[1] : months[0];
   const last = months.length > 2 ? months[months.length - 2] : months[months.length - 1];
 
-  // --- Dual-axis chart ---
-  const hrvPoints = months.filter((m) => m.avgHrv != null).map((m) => ({ month: m.month, val: m.avgHrv! }));
-  const readinessPoints = months.filter((m) => m.avgReadinessScore != null).map((m) => ({ month: m.month, val: m.avgReadinessScore! }));
+  // --- Build chart data based on view ---
+  type ChartPoint = { key: string; label: string; hrv: number | null; readiness: number | null };
+  let chartPoints: ChartPoint[] = [];
+
+  if (view === "year") {
+    chartPoints = months.map((m) => ({
+      key: m.month,
+      label: MONTH_LABELS[parseInt(m.month.slice(5, 7), 10) - 1],
+      hrv: m.avgHrv,
+      readiness: m.avgReadinessScore,
+    }));
+  } else if (view === "quarter" && ouraData) {
+    const today = new Date();
+    const threeMonthsAgo = new Date(today);
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const startStr = threeMonthsAgo.toISOString().slice(0, 10);
+
+    const sleepInRange = ouraData.sleep.filter((s) => s.day >= startStr);
+    const readinessInRange = ouraData.readiness.filter((r) => r.day >= startStr);
+
+    const weeks = new Map<string, { hrvs: number[]; readinesses: number[]; label: string }>();
+    const getWeekKey = (day: string) => {
+      const d = new Date(day + "T00:00:00");
+      const jan1 = new Date(d.getFullYear(), 0, 1);
+      const weekNum = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
+      const monthLabel = MONTH_LABELS[d.getMonth()];
+      return { key: `${d.getFullYear()}-W${weekNum}`, label: `W${weekNum} ${monthLabel}` };
+    };
+
+    for (const s of sleepInRange) {
+      if (s.average_hrv == null || s.average_hrv <= 0) continue;
+      const { key, label } = getWeekKey(s.day);
+      if (!weeks.has(key)) weeks.set(key, { hrvs: [], readinesses: [], label });
+      weeks.get(key)!.hrvs.push(s.average_hrv);
+    }
+    for (const r of readinessInRange) {
+      const { key, label } = getWeekKey(r.day);
+      if (!weeks.has(key)) weeks.set(key, { hrvs: [], readinesses: [], label });
+      weeks.get(key)!.readinesses.push(r.score);
+    }
+
+    const sortedKeys = [...weeks.keys()].sort();
+    chartPoints = sortedKeys.map((k) => {
+      const w = weeks.get(k)!;
+      return {
+        key: k,
+        label: w.label,
+        hrv: w.hrvs.length > 0 ? Math.round(w.hrvs.reduce((a, b) => a + b, 0) / w.hrvs.length) : null,
+        readiness: w.readinesses.length > 0 ? Math.round(w.readinesses.reduce((a, b) => a + b, 0) / w.readinesses.length) : null,
+      };
+    });
+  } else if (view === "month" && ouraData) {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startStr = thirtyDaysAgo.toISOString().slice(0, 10);
+
+    const sleepByDay = new Map(ouraData.sleep.filter((s) => s.day >= startStr).map((s) => [s.day, s]));
+    const readinessByDay = new Map(ouraData.readiness.filter((r) => r.day >= startStr).map((r) => [r.day, r]));
+
+    const allDays = new Set([...sleepByDay.keys(), ...readinessByDay.keys()]);
+    const sortedDays = [...allDays].sort();
+
+    chartPoints = sortedDays.map((day) => {
+      const d = new Date(day + "T00:00:00");
+      const hrv = sleepByDay.get(day)?.average_hrv;
+      return {
+        key: day,
+        label: `${d.getDate()} ${MONTH_LABELS[d.getMonth()]}`,
+        hrv: hrv != null && hrv > 0 ? hrv : null,
+        readiness: readinessByDay.get(day)?.score ?? null,
+      };
+    });
+  }
+
+  // --- Dual-axis chart from chartPoints ---
+  const hrvPoints = chartPoints.filter((p) => p.hrv != null).map((p) => ({ key: p.key, val: p.hrv! }));
+  const readinessPoints = chartPoints.filter((p) => p.readiness != null).map((p) => ({ key: p.key, val: p.readiness! }));
 
   const w = 600;
   const h = 220;
@@ -853,41 +946,38 @@ function YourYear({ months }: { months: HistoryMonth[] }) {
   const plotW = w - pad.left - pad.right;
   const plotH = h - pad.top - pad.bottom;
 
-  // HRV Y range (left axis)
   const hrvVals = hrvPoints.map((p) => p.val);
-  const hrvMin = Math.floor(Math.min(...hrvVals) * 0.92);
-  const hrvMax = Math.ceil(Math.max(...hrvVals) * 1.08);
-  const hrvY = (v: number) => pad.top + plotH - ((v - hrvMin) / (hrvMax - hrvMin)) * plotH;
+  const hrvMin = hrvVals.length > 0 ? Math.floor(Math.min(...hrvVals) * 0.92) : 0;
+  const hrvMax = hrvVals.length > 0 ? Math.ceil(Math.max(...hrvVals) * 1.08) : 100;
+  const hrvY = (v: number) => pad.top + plotH - ((v - hrvMin) / (hrvMax - hrvMin || 1)) * plotH;
 
-  // Readiness Y range (right axis)
   const rdnVals = readinessPoints.map((p) => p.val);
-  const rdnMin = Math.floor(Math.min(...rdnVals) * 0.92);
-  const rdnMax = Math.ceil(Math.max(...rdnVals) * 1.08);
-  const rdnY = (v: number) => pad.top + plotH - ((v - rdnMin) / (rdnMax - rdnMin)) * plotH;
+  const rdnMin = rdnVals.length > 0 ? Math.floor(Math.min(...rdnVals) * 0.92) : 0;
+  const rdnMax = rdnVals.length > 0 ? Math.ceil(Math.max(...rdnVals) * 1.08) : 100;
+  const rdnY = (v: number) => pad.top + plotH - ((v - rdnMin) / (rdnMax - rdnMin || 1)) * plotH;
 
-  // X scale: map months to positions
-  const allMonths = months.map((m) => m.month);
-  const xScale = (month: string) => {
-    const i = allMonths.indexOf(month);
-    return pad.left + (i / (allMonths.length - 1)) * plotW;
+  const allKeys = chartPoints.map((p) => p.key);
+  const xScale = (key: string) => {
+    const i = allKeys.indexOf(key);
+    return pad.left + (allKeys.length > 1 ? (i / (allKeys.length - 1)) * plotW : plotW / 2);
   };
 
   const hrvPath = hrvPoints
-    .map((p, i) => `${i === 0 ? "M" : "L"}${xScale(p.month).toFixed(1)},${hrvY(p.val).toFixed(1)}`)
+    .map((p, i) => `${i === 0 ? "M" : "L"}${xScale(p.key).toFixed(1)},${hrvY(p.val).toFixed(1)}`)
     .join(" ");
   const rdnPath = readinessPoints
-    .map((p, i) => `${i === 0 ? "M" : "L"}${xScale(p.month).toFixed(1)},${rdnY(p.val).toFixed(1)}`)
+    .map((p, i) => `${i === 0 ? "M" : "L"}${xScale(p.key).toFixed(1)},${rdnY(p.val).toFixed(1)}`)
     .join(" ");
 
-  // Y ticks
   const hrvTicks = Array.from({ length: 4 }, (_, i) => Math.round(hrvMin + (i / 3) * (hrvMax - hrvMin)));
   const rdnTicks = Array.from({ length: 4 }, (_, i) => Math.round(rdnMin + (i / 3) * (rdnMax - rdnMin)));
 
-  // X labels
-  const xLabels = allMonths.map((m) => ({
-    month: m,
-    label: MONTH_LABELS[parseInt(m.slice(5, 7), 10) - 1],
-  }));
+  // X labels — show subset to avoid overlap
+  const maxLabels = view === "month" ? 10 : view === "quarter" ? 8 : chartPoints.length;
+  const step = chartPoints.length > maxLabels ? Math.ceil(chartPoints.length / maxLabels) : 1;
+  const xLabels = chartPoints
+    .filter((_, i) => i % step === 0 || i === chartPoints.length - 1)
+    .map((p) => ({ key: p.key, label: p.label }));
 
   // --- Summary calculations ---
   const hrvDelta = first.avgHrv != null && last.avgHrv != null ? last.avgHrv - first.avgHrv : null;
@@ -935,11 +1025,32 @@ function YourYear({ months }: { months: HistoryMonth[] }) {
       : null,
   ].filter(Boolean) as { emoji: string; name: string; text: string; label: string | null; color: string }[];
 
+  const viewTitle = view === "year" ? "Your Year" : view === "quarter" ? "Last Quarter" : "Last 30 Days";
+
   return (
     <div className="mt-10">
-      <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
-        Your Year
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-wider">
+          {viewTitle}
+        </h2>
+        <div className="flex gap-1">
+          {(["year", "quarter", "month"] as YearView[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setView(mode)}
+              className="px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors"
+              style={{
+                background: view === mode ? "var(--accent)" : "var(--bg-card)",
+                color: view === mode ? "#000" : "var(--text-muted)",
+                border: `1px solid ${view === mode ? "var(--accent)" : "var(--border)"}`,
+              }}
+            >
+              {mode === "year" ? "Year" : mode === "quarter" ? "Quarter" : "Month"}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Dual-axis chart */}
       <div
         className="rounded-xl border border-[var(--border)] p-4"
@@ -967,23 +1078,27 @@ function YourYear({ months }: { months: HistoryMonth[] }) {
           <path d={rdnPath} fill="none" stroke="#2dd4bf" strokeWidth="2" />
           {/* X labels */}
           {xLabels.map((l) => (
-            <text key={l.month} x={xScale(l.month)} y={h - 6} textAnchor="middle" fill="var(--text-muted)" fontSize="10">
+            <text key={l.key} x={xScale(l.key)} y={h - 6} textAnchor="middle" fill="var(--text-muted)" fontSize="10">
               {l.label}
             </text>
           ))}
         </svg>
       </div>
 
-      {/* Summary cards */}
-      <div className="flex gap-4 mt-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+      {/* Summary cards — grid layout */}
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-4">
         {summaries.map((s) => (
-          <div key={s.name} className="flex-shrink-0 text-sm">
-            <span className="mr-1">{s.emoji}</span>
-            <span className="text-[var(--text-muted)]">{s.text}</span>
+          <div
+            key={s.name}
+            className="rounded-lg border border-[var(--border)] px-2 py-2 text-center min-w-0"
+            style={{ background: "var(--bg-card)" }}
+          >
+            <div className="text-xs font-medium mb-0.5 truncate">
+              <span className="mr-0.5">{s.emoji}</span>{s.name}
+            </div>
+            <div className="text-[11px] text-[var(--text-muted)] truncate">{s.text}</div>
             {s.label && (
-              <span className="ml-1.5 text-xs font-medium" style={{ color: s.color }}>
-                · {s.label}
-              </span>
+              <div className="text-[10px] font-medium mt-0.5" style={{ color: s.color }}>{s.label}</div>
             )}
           </div>
         ))}
@@ -1538,7 +1653,7 @@ export default function Dashboard() {
       {/* Patterns — practice-to-body correlations */}
       {ouraData && <PatternsSection logs={logs} ouraData={ouraData} />}
 
-      {historyMonths && <YourYear months={historyMonths} />}
+      {historyMonths && <YourYear months={historyMonths} ouraData={ouraData} />}
 
     </main>
   );
