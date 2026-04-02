@@ -1193,7 +1193,7 @@ export default function Dashboard() {
                     {wotLogs.length > 0 && (
                       <tr>
                         <td className="pr-3 py-1.5 whitespace-nowrap">
-                          <span className="text-sm md:text-base">🧠</span>
+                          <span className="text-sm md:text-base">🪟</span>
                           <span className="hidden md:inline text-xs text-[var(--text-muted)] ml-1.5">WOT</span>
                         </td>
                         {rangeDays.map((day) => {
