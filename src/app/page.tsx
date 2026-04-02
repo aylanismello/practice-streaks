@@ -1122,6 +1122,7 @@ export default function Dashboard() {
   const [timeOffset, setTimeOffset] = useState(0);
   const [wotLogs, setWotLogs] = useState<WotEntry[]>([]);
   const [historyMonths, setHistoryMonths] = useState<HistoryMonth[] | null>(null);
+  const [focusmateData, setFocusmateData] = useState<FocusmateData | null>(null);
 
   const fetchData = useCallback(async () => {
     const effectiveDate = getEffectiveDate();
@@ -1163,6 +1164,12 @@ export default function Dashboard() {
     fetch("/api/oura-history")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data?.months) setHistoryMonths(data.months); })
+      .catch(() => {});
+
+    // Fetch Focusmate data (non-blocking)
+    fetch("/api/focusmate?days=30")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data && !data.error) setFocusmateData(data); })
       .catch(() => {});
   }, []);
 
