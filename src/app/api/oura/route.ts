@@ -26,6 +26,13 @@ interface OuraDailySleepEntry {
   day: string;
 }
 
+interface OuraStressEntry {
+  day: string;
+  stress_high: number;
+  recovery_high: number;
+  day_summary: string;
+}
+
 async function fetchOura<T>(path: string, token: string): Promise<T[]> {
   const res = await fetch(`${OURA_BASE}/${path}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -55,11 +62,12 @@ export async function GET() {
   const dateRange = `start_date=${startDate}&end_date=${endDate}`;
 
   try {
-    const [sleep, readiness, resilience, dailySleep] = await Promise.all([
+    const [sleep, readiness, resilience, dailySleep, stress] = await Promise.all([
       fetchOura<OuraSleepEntry>(`sleep?${dateRange}`, token),
       fetchOura<OuraReadinessEntry>(`daily_readiness?${dateRange}`, token),
       fetchOura<OuraResilienceEntry>(`daily_resilience?${dateRange}`, token),
       fetchOura<OuraDailySleepEntry>(`daily_sleep?${dateRange}`, token),
+      fetchOura<OuraStressEntry>(`daily_stress?${dateRange}`, token),
     ]);
 
     const response = NextResponse.json({
@@ -67,6 +75,7 @@ export async function GET() {
       readiness: readiness.map((r) => ({ score: r.score, day: r.day })),
       resilience: resilience.map((r) => ({ level: r.level, day: r.day })),
       dailySleep: dailySleep.map((s) => ({ score: s.score, day: s.day })),
+      stress: stress.map((s) => ({ day: s.day, stress_high: s.stress_high, recovery_high: s.recovery_high, day_summary: s.day_summary })),
     });
 
     response.headers.set(

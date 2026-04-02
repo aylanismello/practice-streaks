@@ -19,6 +19,7 @@ interface OuraData {
   readiness: { score: number; day: string }[];
   resilience: { level: string; day: string }[];
   dailySleep: { score: number; day: string }[];
+  stress: { day: string; stress_high: number; recovery_high: number; day_summary: string }[];
 }
 
 interface PracticeType {
@@ -90,33 +91,20 @@ function StreakBadge({ count }: { count: number }) {
   );
 }
 
-function getMonthRange(today: string, offset: number): { start: string; end: string } {
-  const d = new Date(today + "T12:00:00");
-  d.setMonth(d.getMonth() + offset);
-  const year = d.getFullYear();
-  const month = d.getMonth();
-  const start = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const end = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-  return { start, end };
-}
-
-function filterByMonth<T extends { day: string }>(items: T[], start: string, end: string): T[] {
-  return items.filter((i) => i.day >= start && i.day <= end);
-}
 
 function HrvCard({ avg, delta }: { avg: number; delta: number | null }) {
-  const context = delta === null ? null : Math.abs(delta) <= 2 ? "stable" : delta > 0 ? "trending up" : "trending down";
-  const contextColor = context === "stable" ? "text-[var(--text-muted)]" : context === "trending up" ? "text-green-400" : "text-amber-400";
+  const isStable = delta === null || Math.abs(delta) <= 3;
+  const label = delta === null ? null : isStable ? "stable" : delta > 0 ? "shifting up" : "shifting down";
+  const labelColor = isStable ? "text-green-400" : "text-amber-400";
   return (
     <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Avg HRV</div>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">HRV · 30d avg</div>
       <div className="text-2xl font-bold text-amber-400">
         {Math.round(avg)}<span className="text-sm font-normal text-[var(--text-muted)] ml-0.5">ms</span>
       </div>
-      {delta !== null && (
-        <div className={`text-xs mt-1 ${contextColor}`}>
-          {context} {context !== "stable" && `(${delta > 0 ? "+" : ""}${delta.toFixed(1)}ms)`}
+      {label !== null && (
+        <div className={`text-xs mt-1 ${labelColor}`}>
+          {label}{!isStable && ` (${delta! > 0 ? "+" : ""}${delta!.toFixed(1)}ms)`}
         </div>
       )}
     </div>
@@ -130,7 +118,7 @@ function ResilienceCard({
   distribution: Record<string, number>;
   prevStrongSolidPct: number | null;
 }) {
-  const levels = ["exceptional", "strong", "solid", "adequate", "limited"] as const;
+  const displayLevels = ["strong", "solid", "adequate"] as const;
   const colors: Record<string, string> = {
     exceptional: "#eab308",
     strong: "#22c55e",
@@ -139,95 +127,96 @@ function ResilienceCard({
     limited: "#ef4444",
   };
   const total = Object.values(distribution).reduce((a, b) => a + b, 0);
-  const strongSolidPct = total > 0
-    ? ((distribution.exceptional ?? 0) + (distribution.strong ?? 0) + (distribution.solid ?? 0)) / total * 100
-    : 0;
+  const strongSolidCount = (distribution.exceptional ?? 0) + (distribution.strong ?? 0) + (distribution.solid ?? 0);
+  const strongSolidPct = total > 0 ? (strongSolidCount / total) * 100 : 0;
   const delta = prevStrongSolidPct !== null ? strongSolidPct - prevStrongSolidPct : null;
 
   return (
     <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Resilience</div>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Resilience · 30d</div>
       <div className="text-2xl font-bold text-amber-400 mb-2">
         {Math.round(strongSolidPct)}<span className="text-sm font-normal text-[var(--text-muted)] ml-0.5">% solid+</span>
       </div>
-      {/* Stacked bar */}
-      {total > 0 && (
-        <div className="flex h-3 rounded-full overflow-hidden mb-2">
-          {levels.map((level) => {
-            const count = distribution[level] ?? 0;
-            if (count === 0) return null;
-            const pct = (count / total) * 100;
-            return (
-              <div
-                key={level}
-                style={{ width: `${pct}%`, backgroundColor: colors[level] }}
-                title={`${level}: ${Math.round(pct)}%`}
-              />
-            );
-          })}
-        </div>
-      )}
-      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-        {levels.map((level) => {
-          const count = distribution[level] ?? 0;
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-1">
+        {displayLevels.map((level) => {
+          const count = (level === "strong" ? (distribution.exceptional ?? 0) + (distribution.strong ?? 0) : distribution[level] ?? 0);
           if (count === 0) return null;
-          const pct = Math.round((count / total) * 100);
           return (
             <span key={level} className="text-[10px] text-[var(--text-muted)]">
               <span className="inline-block w-1.5 h-1.5 rounded-full mr-0.5" style={{ backgroundColor: colors[level] }} />
-              {pct}% {level}
+              {count}d {level}
             </span>
           );
         })}
       </div>
       {delta !== null && (
-        <div className={`text-xs mt-1 ${delta >= 0 ? "text-green-400" : "text-amber-400"}`}>
-          {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(0)}% vs last month
+        <div className={`text-xs mt-1 ${Math.abs(delta) <= 5 ? "text-green-400" : delta >= 0 ? "text-green-400" : "text-amber-400"}`}>
+          {Math.abs(delta) <= 5 ? "stable" : delta >= 0 ? `+${Math.abs(delta).toFixed(0)}%` : `−${Math.abs(delta).toFixed(0)}%`} vs prior 30d
         </div>
       )}
     </div>
   );
 }
 
-function ConsistencyCard({
+function ConsistencyLine({
   days,
-  total,
-  pct,
-  delta,
+  prevDays,
 }: {
   days: number;
-  total: number;
-  pct: number;
-  delta: number | null;
+  prevDays: number | null;
 }) {
-  const radius = 20;
-  const circumference = 2 * Math.PI * radius;
-  const filled = (pct / 100) * circumference;
+  const delta = prevDays !== null ? days - prevDays : null;
+  return (
+    <div className="mt-2 text-center text-xs text-[var(--text-muted)]">
+      Practiced <span className="text-[var(--text)] font-medium">{days}</span> of last 30 days
+      {delta !== null && (
+        <span className={delta >= 0 ? " text-green-400" : " text-amber-400"}>
+          {" · "}{delta === 0 ? "same as" : delta > 0 ? `+${delta} vs` : `${delta} vs`} prior 30d
+        </span>
+      )}
+    </div>
+  );
+}
+
+function StressBalanceCard({
+  stressData,
+}: {
+  stressData: OuraData["stress"];
+}) {
+  if (stressData.length === 0) {
+    return (
+      <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+        <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Stress · 30d</div>
+        <div className="text-xs text-[var(--text-muted)]">No data yet</div>
+      </div>
+    );
+  }
+
+  const recoveryDays = stressData.filter((s) => s.recovery_high >= s.stress_high).length;
+  const stressDays = stressData.length - recoveryDays;
+  const balanced = recoveryDays >= stressDays;
+  const ratio = stressData.length > 0 ? recoveryDays / stressData.length : 0;
 
   return (
     <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Consistency</div>
-      <div className="flex items-center gap-3">
-        <svg width="52" height="52" viewBox="0 0 52 52">
-          <circle cx="26" cy="26" r={radius} fill="none" stroke="var(--border)" strokeWidth="4" />
-          <circle
-            cx="26" cy="26" r={radius} fill="none"
-            stroke="#f59e0b" strokeWidth="4" strokeLinecap="round"
-            strokeDasharray={`${filled} ${circumference - filled}`}
-            transform="rotate(-90 26 26)"
-          />
-          <text x="26" y="26" textAnchor="middle" dominantBaseline="central" fill="#f59e0b" fontSize="12" fontWeight="bold">
-            {Math.round(pct)}%
-          </text>
-        </svg>
-        <div>
-          <div className="text-sm font-medium text-[var(--text)]">{days}/{total} days</div>
-          {delta !== null && (
-            <div className={`text-xs ${delta >= 0 ? "text-green-400" : "text-amber-400"}`}>
-              {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(0)}% vs last month
-            </div>
-          )}
-        </div>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Stress · 30d</div>
+      <div className={`text-lg font-bold mb-1 ${balanced ? "text-green-400" : "text-amber-400"}`}>
+        {balanced ? "balanced" : "high load"}
+      </div>
+      {/* Balance bar */}
+      <div className="flex h-2 rounded-full overflow-hidden mb-2">
+        <div
+          className="h-full"
+          style={{ width: `${ratio * 100}%`, backgroundColor: "#4ade80" }}
+        />
+        <div
+          className="h-full"
+          style={{ width: `${(1 - ratio) * 100}%`, backgroundColor: "#fbbf24" }}
+        />
+      </div>
+      <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
+        <span>{recoveryDays}d recovery</span>
+        <span>{stressDays}d stress</span>
       </div>
     </div>
   );
@@ -264,21 +253,8 @@ function formatTime12h(minutes: number): string {
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-function bedtimeColor(deltaMin: number): string {
-  const abs = Math.abs(deltaMin);
-  if (deltaMin <= 0 || abs <= 15) return "text-green-400";
-  if (abs <= 45) return "text-amber-400";
-  return "text-red-400";
-}
 
-function bedtimeDotColor(deltaMin: number): string {
-  const abs = Math.abs(deltaMin);
-  if (deltaMin <= 0 || abs <= 15) return "#4ade80";
-  if (abs <= 45) return "#fbbf24";
-  return "#f87171";
-}
-
-function BedtimeCard({ sleepData, today }: { sleepData: OuraData["sleep"]; today: string }) {
+function BedtimeCard({ sleepData, today, logs, practices }: { sleepData: OuraData["sleep"]; today: string; logs: PracticeLog[]; practices: PracticeType[] }) {
   const targetMin = getTargetMinutes(TARGET_BEDTIME);
   const [now, setNow] = useState(() => new Date());
 
@@ -287,29 +263,9 @@ function BedtimeCard({ sleepData, today }: { sleepData: OuraData["sleep"]; today
     return () => clearInterval(interval);
   }, []);
 
-  // Tonight's countdown
   const nowPT = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-  const nowMinutes = nowPT.getHours() * 60 + nowPT.getMinutes();
-  // Target is after midnight (e.g. 1:00 AM = 60 min). If current time is afternoon/evening,
-  // bedtime is tonight (hours away). If it's early morning past target, we're past bedtime.
-  const normalizeNow = nowMinutes >= 18 * 60 ? nowMinutes - 24 * 60 : nowMinutes;
-  const normalizeTarget = targetMin >= 18 * 60 ? targetMin - 24 * 60 : targetMin;
-  const minutesUntil = normalizeTarget - normalizeNow;
-
-  let countdownLabel: string;
-  let countdownColor: string;
-  if (minutesUntil > 0) {
-    const h = Math.floor(minutesUntil / 60);
-    const m = minutesUntil % 60;
-    countdownLabel = h > 0 ? `${h}h ${m}m until bedtime` : `${m}m until bedtime`;
-    countdownColor = "text-green-400";
-  } else {
-    const pastMin = Math.abs(minutesUntil);
-    const h = Math.floor(pastMin / 60);
-    const m = pastMin % 60;
-    countdownLabel = h > 0 ? `+${h}h ${m}m past bedtime` : `+${m}m past bedtime`;
-    countdownColor = pastMin > 45 ? "text-red-400" : "text-amber-400";
-  }
+  const nowHour = nowPT.getHours();
+  const isEvening = nowHour >= 21; // 9 PM+
 
   // Last night's actual bedtime from Oura
   const sorted = [...sleepData]
@@ -320,53 +276,80 @@ function BedtimeCard({ sleepData, today }: { sleepData: OuraData["sleep"]; today
   const actualMin = latest ? parseBedtimeMinutes(latest.bedtime_start) : null;
   const lastNightDelta = actualMin !== null ? bedtimeDeltaMinutes(actualMin, targetMin) : null;
   const lastNightAbsMin = lastNightDelta !== null ? Math.abs(lastNightDelta) : null;
-  const lastNightColorClass = lastNightDelta !== null ? bedtimeColor(lastNightDelta) : "";
 
   let lastNightDeltaLabel: string | null = null;
   if (lastNightDelta !== null && lastNightAbsMin !== null) {
     if (lastNightAbsMin <= 15) {
       lastNightDeltaLabel = "on time";
     } else if (lastNightDelta > 0) {
-      lastNightDeltaLabel = `+${lastNightAbsMin}m late`;
+      lastNightDeltaLabel = `${lastNightAbsMin}m late`;
     } else {
       lastNightDeltaLabel = `${lastNightAbsMin}m early`;
     }
   }
+  const deltaColor = lastNightDelta === null ? "" : Math.abs(lastNightDelta) <= 15 ? "text-green-400" : Math.abs(lastNightDelta) <= 45 ? "text-amber-400" : "text-amber-400";
 
-  // 7-day dots
-  const last7 = sorted.slice(0, 7).reverse();
+  if (isEvening) {
+    // Evening mode: countdown + routine status
+    const nowMinutes = nowPT.getHours() * 60 + nowPT.getMinutes();
+    const normalizeNow = nowMinutes >= 18 * 60 ? nowMinutes - 24 * 60 : nowMinutes;
+    const normalizeTarget = targetMin >= 18 * 60 ? targetMin - 24 * 60 : targetMin;
+    const minutesUntil = normalizeTarget - normalizeNow;
 
+    let countdownLabel: string;
+    let countdownColor: string;
+    if (minutesUntil > 0) {
+      const h = Math.floor(minutesUntil / 60);
+      const m = minutesUntil % 60;
+      countdownLabel = h > 0 ? `${h}h ${m}m` : `${m}m`;
+      countdownColor = "text-green-400";
+    } else {
+      const pastMin = Math.abs(minutesUntil);
+      const h = Math.floor(pastMin / 60);
+      const m = pastMin % 60;
+      countdownLabel = h > 0 ? `+${h}h ${m}m` : `+${m}m`;
+      countdownColor = "text-amber-400";
+    }
+
+    const nighttimePractice = practices.find(
+      (p) => p.id === "nighttime" || p.name.toLowerCase().includes("nighttime") || p.name.toLowerCase().includes("night")
+    );
+    const nighttimeDone = nighttimePractice
+      ? logs.some((l) => l.practice_date === today && l.practice_id === nighttimePractice.id)
+      : false;
+
+    return (
+      <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+        <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Bedtime</div>
+        <div className={`text-2xl font-bold mb-1 ${countdownColor}`}>{countdownLabel}</div>
+        <div className="text-xs text-[var(--text-muted)]">
+          {minutesUntil > 0 ? "until bedtime" : "past bedtime"}
+        </div>
+        <div className={`text-xs mt-2 ${nighttimeDone ? "text-green-400" : "text-amber-400"}`}>
+          {nighttimeDone ? "routine done ✓" : "routine not started"}
+        </div>
+      </div>
+    );
+  }
+
+  // Daytime mode: last night's bedtime only
   return (
     <div className="rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
       <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Bedtime</div>
-      <div className="text-xs text-[var(--text-muted)] mb-1">Target: {formatTime12h(targetMin)}</div>
-      <div className={`text-sm font-medium mb-2 ${countdownColor}`}>{countdownLabel}</div>
-      {actualMin !== null && (
-        <div className="flex items-baseline gap-2 mb-1">
-          <span className="text-lg font-bold text-amber-400">{formatTime12h(actualMin)}</span>
-          <span className="text-[10px] text-[var(--text-muted)]">last night</span>
+      {actualMin !== null ? (
+        <>
+          <div className="text-2xl font-bold text-amber-400">
+            {formatTime12h(actualMin)}
+          </div>
           {lastNightDeltaLabel && (
-            <span className={`text-[10px] ${lastNightColorClass}`}>{lastNightDeltaLabel}</span>
+            <div className={`text-xs mt-1 ${deltaColor}`}>
+              {lastNightDeltaLabel}
+            </div>
           )}
-        </div>
+        </>
+      ) : (
+        <div className="text-xs text-[var(--text-muted)]">No data</div>
       )}
-      {/* 7-day dots */}
-      <div className="flex gap-1.5 items-center mt-2">
-        {last7.map((s) => {
-          const m = parseBedtimeMinutes(s.bedtime_start);
-          if (m === null) return null;
-          const d = bedtimeDeltaMinutes(m, targetMin);
-          return (
-            <div
-              key={s.day}
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: bedtimeDotColor(d) }}
-              title={`${s.day}: ${formatTime12h(m)}`}
-            />
-          );
-        })}
-        <span className="text-[9px] text-[var(--text-muted)] ml-1">7d</span>
-      </div>
     </div>
   );
 }
@@ -1207,21 +1190,34 @@ export default function Dashboard() {
 
       {/* North Star Metrics */}
       {ouraData && today && (() => {
-        const curr = getMonthRange(today, 0);
-        const prev = getMonthRange(today, -1);
+        // Rolling 30-day windows
+        const todayDate = new Date(today + "T12:00:00");
+        const curr30Start = new Date(todayDate);
+        curr30Start.setDate(curr30Start.getDate() - 29);
+        const prev30Start = new Date(curr30Start);
+        prev30Start.setDate(prev30Start.getDate() - 30);
+        const prev30End = new Date(curr30Start);
+        prev30End.setDate(prev30End.getDate() - 1);
+
+        const fmt = (d: Date) => formatDateLocal(d);
+        const currStart = fmt(curr30Start);
+        const currEnd = fmt(todayDate);
+        const prevStart = fmt(prev30Start);
+        const prevEnd = fmt(prev30End);
+
+        const inRange = <T extends { day: string }>(items: T[], start: string, end: string) =>
+          items.filter((i) => i.day >= start && i.day <= end);
 
         // HRV
-        const currSleep = filterByMonth(ouraData.sleep, curr.start, curr.end);
-        const prevSleep = filterByMonth(ouraData.sleep, prev.start, prev.end);
-        const currHrvVals = currSleep.map((s) => s.average_hrv).filter((v) => v > 0);
-        const prevHrvVals = prevSleep.map((s) => s.average_hrv).filter((v) => v > 0);
+        const currHrvVals = inRange(ouraData.sleep, currStart, currEnd).map((s) => s.average_hrv).filter((v) => v > 0);
+        const prevHrvVals = inRange(ouraData.sleep, prevStart, prevEnd).map((s) => s.average_hrv).filter((v) => v > 0);
         const avgHrv = currHrvVals.length > 0 ? currHrvVals.reduce((a, b) => a + b, 0) / currHrvVals.length : 0;
         const prevAvgHrv = prevHrvVals.length > 0 ? prevHrvVals.reduce((a, b) => a + b, 0) / prevHrvVals.length : 0;
         const hrvDelta = prevAvgHrv > 0 ? avgHrv - prevAvgHrv : null;
 
-        // Resilience distribution
-        const currRes = filterByMonth(ouraData.resilience, curr.start, curr.end);
-        const prevRes = filterByMonth(ouraData.resilience, prev.start, prev.end);
+        // Resilience distribution (rolling 30d)
+        const currRes = inRange(ouraData.resilience, currStart, currEnd);
+        const prevRes = inRange(ouraData.resilience, prevStart, prevEnd);
         const currDist: Record<string, number> = {};
         for (const r of currRes) currDist[r.level] = (currDist[r.level] ?? 0) + 1;
         const prevTotal = prevRes.length;
@@ -1229,17 +1225,16 @@ export default function Dashboard() {
           ? (prevRes.filter((r) => ["exceptional", "strong", "solid"].includes(r.level)).length / prevTotal) * 100
           : null;
 
-        // Consistency
-        const currMonth = curr.start.slice(0, 7);
-        const prevMonth = prev.start.slice(0, 7);
-        const currDaysWithPractice = new Set(logs.filter((l) => l.practice_date.startsWith(currMonth)).map((l) => l.practice_date)).size;
-        const prevDaysWithPractice = new Set(logs.filter((l) => l.practice_date.startsWith(prevMonth)).map((l) => l.practice_date)).size;
-        const daysInCurrMonth = new Date(parseInt(curr.start), parseInt(curr.start.slice(5, 7)), 0).getDate();
-        const todayDay = parseInt(today.slice(8, 10));
-        const effectiveDaysCurr = today.startsWith(currMonth) ? todayDay : daysInCurrMonth;
-        const daysInPrevMonth = new Date(parseInt(prev.start), parseInt(prev.start.slice(5, 7)), 0).getDate();
-        const consistencyPct = effectiveDaysCurr > 0 ? (currDaysWithPractice / effectiveDaysCurr) * 100 : 0;
-        const prevConsistencyPct = daysInPrevMonth > 0 ? (prevDaysWithPractice / daysInPrevMonth) * 100 : 0;
+        // Consistency (rolling 30d)
+        const currDaysWithPractice = new Set(
+          logs.filter((l) => l.practice_date >= currStart && l.practice_date <= currEnd).map((l) => l.practice_date)
+        ).size;
+        const prevDaysWithPractice = new Set(
+          logs.filter((l) => l.practice_date >= prevStart && l.practice_date <= prevEnd).map((l) => l.practice_date)
+        ).size;
+
+        // Stress (rolling 30d)
+        const currStress = inRange(ouraData.stress, currStart, currEnd);
 
         return (
           <div className="mt-8">
@@ -1248,15 +1243,14 @@ export default function Dashboard() {
             </h2>
             <div className="grid grid-cols-2 gap-3">
               <HrvCard avg={avgHrv} delta={hrvDelta} />
-              <BedtimeCard sleepData={ouraData.sleep} today={today} />
+              <BedtimeCard sleepData={ouraData.sleep} today={today} logs={logs} practices={practices} />
               <ResilienceCard distribution={currDist} prevStrongSolidPct={prevStrongSolidPct} />
-              <ConsistencyCard
-                days={currDaysWithPractice}
-                total={effectiveDaysCurr}
-                pct={consistencyPct}
-                delta={prevDaysWithPractice > 0 ? consistencyPct - prevConsistencyPct : null}
-              />
+              <StressBalanceCard stressData={currStress} />
             </div>
+            <ConsistencyLine
+              days={currDaysWithPractice}
+              prevDays={prevDaysWithPractice > 0 ? prevDaysWithPractice : null}
+            />
           </div>
         );
       })()}
