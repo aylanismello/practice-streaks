@@ -491,71 +491,6 @@ function HrvChart({ data }: { data: { average_hrv: number; day: string }[] }) {
   );
 }
 
-function WotLogger({
-  today,
-  wotLogs,
-  setWotLogs,
-}: {
-  today: string;
-  wotLogs: WotEntry[];
-  setWotLogs: React.Dispatch<React.SetStateAction<WotEntry[]>>;
-}) {
-  const todayWot = wotLogs.find((w) => w.date === today);
-  const [saving, setSaving] = useState(false);
-
-  const handleTap = async (color: "green" | "yellow" | "red") => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/wot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: today, color }),
-      });
-      if (res.ok) {
-        setWotLogs((prev) => {
-          const filtered = prev.filter((w) => w.date !== today);
-          return [...filtered, { date: today, color }];
-        });
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const options: { color: "green" | "yellow" | "red"; bg: string }[] = [
-    { color: "green", bg: "#4ade80" },
-    { color: "yellow", bg: "#fbbf24" },
-    { color: "red", bg: "#f87171" },
-  ];
-
-  return (
-    <div className="flex flex-col items-center gap-1.5 mb-6">
-      <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">WOT</span>
-      <div className="flex gap-3">
-        {options.map((opt) => {
-          const selected = todayWot?.color === opt.color;
-          return (
-            <button
-              key={opt.color}
-              onClick={() => handleTap(opt.color)}
-              disabled={saving}
-              className="w-8 h-8 rounded-full transition-all duration-200"
-              style={{
-                backgroundColor: opt.bg,
-                opacity: selected ? 1 : 0.35,
-                transform: selected ? "scale(1.15)" : "scale(1)",
-                boxShadow: selected ? `0 0 12px ${opt.bg}60` : "none",
-              }}
-              aria-label={`Log WOT ${opt.color}`}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function TonightCard({
   logs,
   practices,
@@ -959,6 +894,9 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData();
 
+    // Poll every 60s to keep iPad display fresh
+    const poll = setInterval(fetchData, 60_000);
+
     // Realtime subscription
     const channel = supabase
       .channel("practice_log_changes")
@@ -972,6 +910,7 @@ export default function Dashboard() {
       .subscribe();
 
     return () => {
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [fetchData]);
@@ -987,9 +926,6 @@ export default function Dashboard() {
   const todayLogs = new Set(
     logs.filter((l) => l.practice_date === today).map((l) => l.practice_id)
   );
-  const completedCount = todayLogs.size;
-  const totalPractices = practices.length;
-  const last7Days = getLast7Days(today);
 
   return (
     <main className="max-w-[960px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-12">
@@ -1006,32 +942,11 @@ export default function Dashboard() {
         <TripCountdown inline />
       </div>
 
-      {/* Progress bar */}
-      <div className="mb-6 md:mb-8 max-w-md mx-auto md:max-w-lg">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm text-[var(--text-muted)]">Today</span>
-          <span className="text-sm font-medium">
-            {completedCount}/{totalPractices}
-          </span>
-        </div>
-        <div className="h-2 bg-[var(--border)] rounded-full overflow-hidden">
-          <div
-            className="h-full bg-[var(--accent)] rounded-full transition-all duration-500 ease-out"
-            style={{
-              width: `${totalPractices > 0 ? (completedCount / totalPractices) * 100 : 0}%`,
-            }}
-          />
-        </div>
-      </div>
-
-      {/* WOT Tap-to-Log */}
-      <WotLogger today={today} wotLogs={wotLogs} setWotLogs={setWotLogs} />
-
       {/* Tonight card — only after 9 PM */}
       <TonightCard logs={logs} practices={practices} today={today} />
 
       {/* Practice cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-8 md:mb-10">
+      <div className="grid grid-cols-3 md:grid-cols-4 gap-2 md:gap-3 mb-8 md:mb-10">
         {practices.map((practice, i) => {
           const done = todayLogs.has(practice.id);
           const { count: streak, doneToday } = calculateStreak(practice.id, logs, today);
@@ -1039,7 +954,7 @@ export default function Dashboard() {
           return (
             <div
               key={practice.id}
-              className="animate-fade-in rounded-xl p-4 md:p-5 transition-colors duration-200"
+              className="animate-fade-in rounded-xl p-3 md:p-4 transition-colors duration-200"
               style={{
                 animationDelay: `${i * 50}ms`,
                 background: done ? "var(--accent-glow)" : "var(--bg-card)",
