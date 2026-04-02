@@ -491,6 +491,373 @@ function HrvChart({ data }: { data: { average_hrv: number; day: string }[] }) {
   );
 }
 
+function WotLogger({
+  today,
+  wotLogs,
+  setWotLogs,
+}: {
+  today: string;
+  wotLogs: WotEntry[];
+  setWotLogs: React.Dispatch<React.SetStateAction<WotEntry[]>>;
+}) {
+  const todayWot = wotLogs.find((w) => w.date === today);
+  const [saving, setSaving] = useState(false);
+
+  const handleTap = async (color: "green" | "yellow" | "red") => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/wot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: today, color }),
+      });
+      if (res.ok) {
+        setWotLogs((prev) => {
+          const filtered = prev.filter((w) => w.date !== today);
+          return [...filtered, { date: today, color }];
+        });
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const options: { color: "green" | "yellow" | "red"; bg: string }[] = [
+    { color: "green", bg: "#4ade80" },
+    { color: "yellow", bg: "#fbbf24" },
+    { color: "red", bg: "#f87171" },
+  ];
+
+  return (
+    <div className="flex flex-col items-center gap-1.5 mb-6">
+      <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">WOT</span>
+      <div className="flex gap-3">
+        {options.map((opt) => {
+          const selected = todayWot?.color === opt.color;
+          return (
+            <button
+              key={opt.color}
+              onClick={() => handleTap(opt.color)}
+              disabled={saving}
+              className="w-8 h-8 rounded-full transition-all duration-200"
+              style={{
+                backgroundColor: opt.bg,
+                opacity: selected ? 1 : 0.35,
+                transform: selected ? "scale(1.15)" : "scale(1)",
+                boxShadow: selected ? `0 0 12px ${opt.bg}60` : "none",
+              }}
+              aria-label={`Log WOT ${opt.color}`}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TonightCard({
+  logs,
+  practices,
+  today,
+}: {
+  logs: PracticeLog[];
+  practices: PracticeType[];
+  today: string;
+}) {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const nowPT = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+  const nowHour = nowPT.getHours();
+
+  // Only show after 9 PM Pacific
+  if (nowHour < 21) return null;
+
+  // Check if nighttime routine is logged today
+  const nighttimePractice = practices.find(
+    (p) => p.id === "nighttime" || p.name.toLowerCase().includes("nighttime") || p.name.toLowerCase().includes("night")
+  );
+  const nighttimeDone = nighttimePractice
+    ? logs.some((l) => l.practice_date === today && l.practice_id === nighttimePractice.id)
+    : false;
+
+  // Bedtime countdown (reuse logic from BedtimeCard)
+  const targetMin = getTargetMinutes(TARGET_BEDTIME);
+  const nowMinutes = nowPT.getHours() * 60 + nowPT.getMinutes();
+  const normalizeNow = nowMinutes >= 18 * 60 ? nowMinutes - 24 * 60 : nowMinutes;
+  const normalizeTarget = targetMin >= 18 * 60 ? targetMin - 24 * 60 : targetMin;
+  const minutesUntil = normalizeTarget - normalizeNow;
+
+  let countdownLabel: string;
+  let countdownColor: string;
+  if (minutesUntil > 0) {
+    const h = Math.floor(minutesUntil / 60);
+    const m = minutesUntil % 60;
+    countdownLabel = h > 0 ? `${h}h ${m}m until bedtime` : `${m}m until bedtime`;
+    countdownColor = "text-green-400";
+  } else {
+    const pastMin = Math.abs(minutesUntil);
+    const h = Math.floor(pastMin / 60);
+    const m = pastMin % 60;
+    countdownLabel = h > 0 ? `+${h}h ${m}m past bedtime` : `+${m}m past bedtime`;
+    countdownColor = pastMin > 45 ? "text-red-400" : "text-amber-400";
+  }
+
+  return (
+    <div
+      className="rounded-xl p-4 mb-4"
+      style={{
+        background: "var(--bg-card)",
+        border: `1px solid ${nighttimeDone ? "var(--accent)" : "rgba(251,191,36,0.3)"}`,
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Tonight</div>
+          {nighttimeDone ? (
+            <div className="text-sm font-medium text-green-400">Nighttime routine ✓</div>
+          ) : (
+            <div className="text-sm font-medium text-amber-400">Nighttime routine not started</div>
+          )}
+        </div>
+        <div className={`text-sm font-medium ${countdownColor}`}>{countdownLabel}</div>
+      </div>
+    </div>
+  );
+}
+
+function PatternsSection({
+  logs,
+  ouraData,
+}: {
+  logs: PracticeLog[];
+  ouraData: OuraData;
+}) {
+  // Build date-indexed maps
+  const practiceCountByDate = new Map<string, number>();
+  for (const l of logs) {
+    practiceCountByDate.set(l.practice_date, (practiceCountByDate.get(l.practice_date) ?? 0) + 1);
+  }
+
+  const hrvByDate = new Map<string, number>();
+  for (const s of ouraData.sleep) {
+    if (s.average_hrv > 0) hrvByDate.set(s.day, s.average_hrv);
+  }
+
+  const sleepScoreByDate = new Map<string, number>();
+  for (const s of ouraData.dailySleep) {
+    if (s.score > 0) sleepScoreByDate.set(s.day, s.score);
+  }
+
+  const bedtimeByDate = new Map<string, number>();
+  for (const s of ouraData.sleep) {
+    if (s.bedtime_start) {
+      const min = parseBedtimeMinutes(s.bedtime_start);
+      if (min !== null) bedtimeByDate.set(s.day, min);
+    }
+  }
+
+  // Find overlapping dates (dates with both practice data and oura data)
+  const allDates = new Set([...practiceCountByDate.keys()]);
+  const overlapDates = [...allDates].filter((d) => hrvByDate.has(d) || sleepScoreByDate.has(d));
+
+  if (overlapDates.length < 7) {
+    return (
+      <div className="mt-8">
+        <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
+          Patterns
+        </h2>
+        <div
+          className="rounded-xl border border-[var(--border)] p-6 text-center"
+          style={{ background: "var(--bg-card)" }}
+        >
+          <div className="text-sm text-[var(--text-muted)]">Need more data — keep logging</div>
+        </div>
+      </div>
+    );
+  }
+
+  // 1. Practice days vs rest days HRV
+  const practiceDayHrvs: number[] = [];
+  const restDayHrvs: number[] = [];
+  for (const [date, hrv] of hrvByDate) {
+    const count = practiceCountByDate.get(date) ?? 0;
+    if (count >= 3) practiceDayHrvs.push(hrv);
+    else if (count <= 1) restDayHrvs.push(hrv);
+  }
+  const avgPracticeHrv = practiceDayHrvs.length > 0
+    ? practiceDayHrvs.reduce((a, b) => a + b, 0) / practiceDayHrvs.length
+    : null;
+  const avgRestHrv = restDayHrvs.length > 0
+    ? restDayHrvs.reduce((a, b) => a + b, 0) / restDayHrvs.length
+    : null;
+
+  // 2. Next-day effect: sleep score after practice days vs after rest days
+  const sortedDates = [...new Set([...practiceCountByDate.keys(), ...sleepScoreByDate.keys()])].sort();
+  const afterPracticeScores: number[] = [];
+  const afterRestScores: number[] = [];
+  for (let i = 0; i < sortedDates.length - 1; i++) {
+    const thisDate = sortedDates[i];
+    const nextDate = sortedDates[i + 1];
+    // Check if next date is actually the next day
+    const d1 = new Date(thisDate + "T12:00:00");
+    const d2 = new Date(nextDate + "T12:00:00");
+    const diffDays = Math.round((d2.getTime() - d1.getTime()) / (86400000));
+    if (diffDays !== 1) continue;
+
+    const count = practiceCountByDate.get(thisDate) ?? 0;
+    const nextScore = sleepScoreByDate.get(nextDate);
+    if (nextScore === undefined) continue;
+
+    if (count >= 3) afterPracticeScores.push(nextScore);
+    else if (count <= 1) afterRestScores.push(nextScore);
+  }
+  const avgAfterPractice = afterPracticeScores.length > 0
+    ? afterPracticeScores.reduce((a, b) => a + b, 0) / afterPracticeScores.length
+    : null;
+  const avgAfterRest = afterRestScores.length > 0
+    ? afterRestScores.reduce((a, b) => a + b, 0) / afterRestScores.length
+    : null;
+
+  // 3. Bedtime consistency: delta on days with nighttime practice vs without
+  const nighttimePracticeIds = new Set(
+    logs
+      .filter((l) => l.practice_id === "nighttime" || l.practice_id.includes("night"))
+      .map((l) => l.practice_date)
+  );
+  const targetMin = getTargetMinutes(TARGET_BEDTIME);
+  const withRoutineDeltas: number[] = [];
+  const withoutRoutineDeltas: number[] = [];
+  for (const [date, actualMin] of bedtimeByDate) {
+    const delta = Math.abs(bedtimeDeltaMinutes(actualMin, targetMin));
+    if (nighttimePracticeIds.has(date)) withRoutineDeltas.push(delta);
+    else withoutRoutineDeltas.push(delta);
+  }
+  const avgWithRoutine = withRoutineDeltas.length > 0
+    ? withRoutineDeltas.reduce((a, b) => a + b, 0) / withRoutineDeltas.length
+    : null;
+  const avgWithoutRoutine = withoutRoutineDeltas.length > 0
+    ? withoutRoutineDeltas.reduce((a, b) => a + b, 0) / withoutRoutineDeltas.length
+    : null;
+
+  const StatRow = ({
+    label,
+    leftLabel,
+    leftValue,
+    rightLabel,
+    rightValue,
+    unit,
+  }: {
+    label: string;
+    leftLabel: string;
+    leftValue: number | null;
+    rightLabel: string;
+    rightValue: number | null;
+    unit: string;
+  }) => {
+    if (leftValue === null || rightValue === null) return null;
+    const max = Math.max(leftValue, rightValue);
+    return (
+      <div className="py-3 border-b border-[var(--border)] last:border-0">
+        <div className="text-xs text-[var(--text-muted)] mb-2">{label}</div>
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-[var(--text-muted)]">{leftLabel}</span>
+              <span className="text-sm font-medium text-[var(--text)]">
+                {Math.round(leftValue)}{unit}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-[var(--border)] overflow-hidden">
+              <div
+                className="h-full rounded-full bg-green-400"
+                style={{ width: `${max > 0 ? (leftValue / max) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-[var(--text-muted)]">{rightLabel}</span>
+              <span className="text-sm font-medium text-[var(--text)]">
+                {Math.round(rightValue)}{unit}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-[var(--border)] overflow-hidden">
+              <div
+                className="h-full rounded-full bg-amber-400"
+                style={{ width: `${max > 0 ? (rightValue / max) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const hasAnyData =
+    (avgPracticeHrv !== null && avgRestHrv !== null) ||
+    (avgAfterPractice !== null && avgAfterRest !== null) ||
+    (avgWithRoutine !== null && avgWithoutRoutine !== null);
+
+  if (!hasAnyData) {
+    return (
+      <div className="mt-8">
+        <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
+          Patterns
+        </h2>
+        <div
+          className="rounded-xl border border-[var(--border)] p-6 text-center"
+          style={{ background: "var(--bg-card)" }}
+        >
+          <div className="text-sm text-[var(--text-muted)]">Need more data — keep logging</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
+        Patterns
+      </h2>
+      <div
+        className="rounded-xl border border-[var(--border)] p-4"
+        style={{ background: "var(--bg-card)" }}
+      >
+        <StatRow
+          label="HRV on practice days (3+) vs rest days (0-1)"
+          leftLabel="Practice"
+          leftValue={avgPracticeHrv}
+          rightLabel="Rest"
+          rightValue={avgRestHrv}
+          unit="ms"
+        />
+        <StatRow
+          label="Sleep score after practice days vs rest days"
+          leftLabel="After practice"
+          leftValue={avgAfterPractice}
+          rightLabel="After rest"
+          rightValue={avgAfterRest}
+          unit=""
+        />
+        <StatRow
+          label="Bedtime delta with nighttime routine vs without"
+          leftLabel="With routine"
+          leftValue={avgWithRoutine}
+          rightLabel="Without"
+          rightValue={avgWithoutRoutine}
+          unit="m"
+        />
+      </div>
+    </div>
+  );
+}
+
 function TripCountdown({ inline }: { inline?: boolean }) {
   const tripDate = new Date("2026-05-21T00:00:00");
   const now = new Date();
@@ -656,6 +1023,12 @@ export default function Dashboard() {
           />
         </div>
       </div>
+
+      {/* WOT Tap-to-Log */}
+      <WotLogger today={today} wotLogs={wotLogs} setWotLogs={setWotLogs} />
+
+      {/* Tonight card — only after 9 PM */}
+      <TonightCard logs={logs} practices={practices} today={today} />
 
       {/* Practice cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-8 md:mb-10">
@@ -976,6 +1349,8 @@ export default function Dashboard() {
       {/* HRV Trend Chart */}
       {ouraData && <HrvChart data={ouraData.sleep} />}
 
+      {/* Patterns — practice-to-body correlations */}
+      {ouraData && <PatternsSection logs={logs} ouraData={ouraData} />}
 
     </main>
   );
