@@ -41,8 +41,8 @@ interface WotEntry {
 }
 
 interface FocusmateSession {
-  startTime: string;
-  duration: number;
+  date: string;       // YYYY-MM-DD in Pacific
+  duration: number;   // minutes
   completed: boolean;
 }
 
@@ -1175,7 +1175,7 @@ export default function Dashboard() {
       .catch(() => {});
 
     // Fetch Focusmate data (non-blocking)
-    fetch("/api/focusmate?days=30")
+    fetch("/api/focusmate")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data && !data.error) setFocusmateData(data); })
       .catch(() => {});
@@ -1298,15 +1298,10 @@ export default function Dashboard() {
 
         const dayLabels = ["M", "T", "W", "T", "F", "S", "S"];
 
-        // Bucket sessions by effective date (4am boundary)
+        // Bucket sessions by date (already Pacific from API)
         const sessionsByDay = new Map<string, FocusmateSession[]>();
         for (const s of focusmateData.sessions) {
-          const st = new Date(s.startTime);
-          const stPT = new Date(st.toLocaleString("en-US", { timeZone: TZ }));
-          const effDate = stPT.getHours() < 4
-            ? new Date(stPT.getFullYear(), stPT.getMonth(), stPT.getDate() - 1)
-            : stPT;
-          const key = formatDateLocal(effDate);
+          const key = s.date;
           if (!sessionsByDay.has(key)) sessionsByDay.set(key, []);
           sessionsByDay.get(key)!.push(s);
         }
@@ -1314,19 +1309,19 @@ export default function Dashboard() {
         // Week stats
         let weekSessions = 0;
         let weekCompleted = 0;
-        let weekFocusMs = 0;
+        let weekFocusMins = 0;
         for (const day of weekDays) {
           const daySessions = sessionsByDay.get(day) || [];
           weekSessions += daySessions.length;
           for (const s of daySessions) {
             if (s.completed) {
               weekCompleted++;
-              weekFocusMs += s.duration;
+              weekFocusMins += s.duration;
             }
           }
         }
-        const weekHours = Math.floor(weekFocusMs / 3600000);
-        const weekMins = Math.round((weekFocusMs % 3600000) / 60000);
+        const weekHours = Math.floor(weekFocusMins / 60);
+        const weekMins = weekFocusMins % 60;
 
         // Streak: consecutive days with at least one completed session
         const todayStr = formatDateLocal(effectiveNow);
@@ -1407,7 +1402,7 @@ export default function Dashboard() {
                   )}
                   <span className="text-[var(--text-muted)]"> sessions</span>
                 </span>
-                {weekFocusMs > 0 && (
+                {weekFocusMins > 0 && (
                   <span className="text-[var(--text-muted)]">
                     {weekHours > 0 ? `${weekHours}h ` : ""}{weekMins}m focus
                   </span>
