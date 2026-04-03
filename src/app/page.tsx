@@ -1739,12 +1739,60 @@ export default function Dashboard() {
       {/* Tonight card — only after 9 PM */}
       <TonightCard logs={logs} practices={practices} today={today} sleepData={ouraData?.sleep ?? []} />
 
+      {/* Last Night card */}
+      {(() => {
+        const yesterday = formatDateLocal((() => { const d = new Date(today + "T12:00:00"); d.setDate(d.getDate() - 1); return d; })());
+        const longestByDay = getLongestSleepByDay(ouraData?.sleep ?? []);
+        const lastNight = longestByDay.get(today) ?? longestByDay.get(yesterday);
+        const nighttimePractice = practices.find(
+          (p) => p.id === "nighttime" || p.name.toLowerCase().includes("nighttime") || p.name.toLowerCase().includes("night")
+        );
+        const routineDone = nighttimePractice
+          ? logs.some((l) => l.practice_date === yesterday && l.practice_id === nighttimePractice.id)
+          : false;
+
+        const formatIsoTime = (iso: string) => {
+          const pt = new Date(new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+          const h = pt.getHours();
+          const m = pt.getMinutes();
+          const ampm = h >= 12 ? "p" : "a";
+          const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+          return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+        };
+
+        const hasAsleep = !!lastNight?.bedtime_start;
+        const hasWake = !!lastNight?.bedtime_end;
+        const allPresent = routineDone && hasAsleep && hasWake;
+        const borderColor = allPresent ? "rgba(34,197,94,0.3)" : "rgba(251,191,36,0.3)";
+
+        return (
+          <div
+            className="rounded-xl p-3 md:p-4 mb-4 md:mb-5"
+            style={{ background: "var(--bg-card)", border: `1px solid ${borderColor}` }}
+          >
+            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5">🌙 Last Night</div>
+            <div className="flex items-center gap-2 text-sm md:text-base">
+              <span className={routineDone ? "text-green-400" : "text-amber-400"}>
+                routine {routineDone ? "✓" : "✗"}
+              </span>
+              <span className="text-[var(--text-muted)]">→</span>
+              <span className={hasAsleep ? "text-green-400" : "text-amber-400"}>
+                asleep {hasAsleep ? formatIsoTime(lastNight!.bedtime_start!) : "–"}
+              </span>
+              <span className="text-[var(--text-muted)]">→</span>
+              <span className={hasWake ? "text-green-400" : "text-amber-400"}>
+                wake {hasWake ? formatIsoTime(lastNight!.bedtime_end!) : "–"}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Practice cards */}
       <div className="grid grid-cols-4 gap-2 md:gap-3 mb-8 md:mb-10">
         {practices.map((practice, i) => {
           const done = todayLogs.has(practice.id);
           const { count: streak, doneToday } = calculateStreak(practice.id, logs, today);
-          const atRisk = streak > 0 && !doneToday;
           return (
             <div
               key={practice.id}
@@ -1752,7 +1800,7 @@ export default function Dashboard() {
               style={{
                 animationDelay: `${i * 50}ms`,
                 background: done ? "var(--accent-glow)" : "var(--bg-card)",
-                border: `1px solid ${done ? "var(--accent)" : atRisk ? "rgba(255,165,0,0.3)" : "var(--border)"}`,
+                border: `1px solid ${done ? "var(--accent)" : "var(--border)"}`,
               }}
               onClick={() => timeOffset === 0 && !togglingId && togglePractice(practice.id, done)}
             >
@@ -1770,8 +1818,8 @@ export default function Dashboard() {
                 {practice.name}
               </div>
               {streak > 0 && (
-                <div className={`text-xs md:text-sm mt-1 ${atRisk ? "text-orange-400" : "text-[var(--text-muted)]"}`}>
-                  {streak}d streak{atRisk ? " ⚠️" : ""}
+                <div className="text-xs md:text-sm mt-1 text-[var(--text-muted)]">
+                  {streak}d streak
                   <StreakBadge count={streak} />
                 </div>
               )}
@@ -1790,25 +1838,12 @@ export default function Dashboard() {
         // HRV and sleep score lookup maps for table rows
         const hrvByDay = new Map<string, number>();
         const sleepByDay = new Map<string, number>();
-        const resByDay = new Map<string, string>();
         if (ouraData) {
           for (const s of ouraData.sleep) {
             if (s.average_hrv && s.average_hrv > 0) hrvByDay.set(s.day, s.average_hrv);
           }
           for (const s of ouraData.dailySleep) {
             if (s.score && s.score > 0) sleepByDay.set(s.day, s.score);
-          }
-          for (const r of ouraData.resilience) {
-            if (r.level) resByDay.set(r.day, r.level);
-          }
-        }
-        // Sleep frame scoring by day
-        const sleepFrameByDay = new Map<string, SleepFrame>();
-        if (ouraData) {
-          const longestByDay = getLongestSleepByDay(ouraData.sleep);
-          for (const [day, entry] of longestByDay) {
-            const frame = scoreSleepFrame(entry);
-            if (frame) sleepFrameByDay.set(day, frame);
           }
         }
         // Focusmate sessions by day
@@ -1936,30 +1971,6 @@ export default function Dashboard() {
                         })}
                       </tr>
                     ))}
-                    {/* WOT row */}
-                    {wotLogs.length > 0 && (
-                      <tr>
-                        <td className="pr-3 py-1.5 whitespace-nowrap">
-                          <span className="text-sm md:text-base">🪟</span>
-                          <span className="hidden md:inline text-xs text-[var(--text-muted)] ml-1.5">WOT</span>
-                        </td>
-                        {rangeDays.map((day) => {
-                          const wot = wotLogs.find((w) => w.date === day);
-                          const wotColors: Record<string, string> = { green: "#4ade80", yellow: "#fbbf24", red: "#f87171" };
-                          return (
-                            <td key={day} className="text-center py-1.5 px-1">
-                              {wot ? (
-                                <span
-                                  className="inline-block w-[6px] h-[6px] rounded-full"
-                                  style={{ backgroundColor: wotColors[wot.color] }}
-                                  title={`WOT: ${wot.color}`}
-                                />
-                              ) : null}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    )}
                     {/* HRV row */}
                     {hrvByDay.size > 0 && (
                       <tr>
@@ -2007,57 +2018,6 @@ export default function Dashboard() {
                         })}
                       </tr>
                     )}
-                    {/* Resilience row */}
-                    {resByDay.size > 0 && (
-                      <tr>
-                        <td className="pr-3 py-1.5 whitespace-nowrap">
-                          <span className="text-sm md:text-base">🛡️</span>
-                        </td>
-                        {rangeDays.map((day) => {
-                          const level = resByDay.get(day);
-                          let color = "var(--text-muted)";
-                          let label = "–";
-                          if (level) {
-                            if (level === "exceptional") { color = "#eab308"; label = "E"; }
-                            else if (level === "strong") { color = "#22c55e"; label = "S+"; }
-                            else if (level === "solid") { color = "#22c55e"; label = "S"; }
-                            else if (level === "adequate") { color = "#eab308"; label = "A"; }
-                            else if (level === "limited") { color = "#ef4444"; label = "L"; }
-                            else { label = level[0].toUpperCase(); }
-                          }
-                          return (
-                            <td key={day} className="text-center py-1.5 px-1">
-                              <span className="text-[10px] md:text-xs font-mono tabular-nums" style={{ color }} title={level ?? ""}>
-                                {label}
-                              </span>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    )}
-                    {/* Sleep frame row */}
-                    {sleepFrameByDay.size > 0 && (
-                      <tr>
-                        <td className="pr-3 py-1.5 whitespace-nowrap">
-                          <span className="text-sm md:text-base">🛏️</span>
-                        </td>
-                        {rangeDays.map((day) => {
-                          const frame = sleepFrameByDay.get(day);
-                          let dot = "🟣";
-                          if (frame?.status === "complete") dot = "🟢";
-                          else if (frame?.status === "partial") dot = "🟡";
-                          return (
-                            <td key={day} className="text-center py-1.5 px-1">
-                              <span className="text-[10px] md:text-xs" title={
-                                frame ? `bed ${frame.slept_on_time ? "✓" : "✗"} wake ${frame.woke_on_time ? "✓" : "✗"}` : "no data"
-                              }>
-                                {dot}
-                              </span>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    )}
                     {/* Focusmate row */}
                     {focusByDay.size > 0 && (
                       <tr>
@@ -2078,6 +2038,28 @@ export default function Dashboard() {
                               ) : (
                                 <span className="text-[10px] text-[var(--text-muted)]">–</span>
                               )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    )}
+                    {/* WOT row */}
+                    {wotLogs.length > 0 && (
+                      <tr>
+                        <td className="pr-3 py-1.5 whitespace-nowrap">
+                          <span className="text-sm md:text-base">🪟</span>
+                          <span className="hidden md:inline text-xs text-[var(--text-muted)] ml-1.5">WOT</span>
+                        </td>
+                        {rangeDays.map((day) => {
+                          const wot = wotLogs.find((w) => w.date === day);
+                          const wotEmoji: Record<string, string> = { green: "🟢", yellow: "🟡", red: "🔴" };
+                          return (
+                            <td key={day} className="text-center py-1.5 px-1">
+                              {wot ? (
+                                <span className="text-sm" title={`WOT: ${wot.color}`}>
+                                  {wotEmoji[wot.color]}
+                                </span>
+                              ) : null}
                             </td>
                           );
                         })}
