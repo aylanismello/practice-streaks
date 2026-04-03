@@ -57,6 +57,28 @@ interface FocusmateData {
   };
 }
 
+interface ChinaTaichiLog {
+  id: string;
+  practice_date: string;
+  move_number: number | null;
+  note: string | null;
+  created_at: string;
+}
+
+type ActiveTab = "practice" | "china";
+
+const CHINA_DEPARTURE = "2026-05-21";
+const CHINA_BUFFER_START = "2026-05-15";
+const CHINA_WEEKS = [
+  { label: "Week 1", start: "2026-04-03", moveRange: [1, 4] as const },
+  { label: "Week 2", start: "2026-04-10", moveRange: [5, 8] as const },
+  { label: "Week 3", start: "2026-04-17", moveRange: [9, 12] as const },
+  { label: "Week 4", start: "2026-04-24", moveRange: [13, 16] as const },
+  { label: "Week 5", start: "2026-05-01", moveRange: [17, 20] as const },
+  { label: "Week 6", start: "2026-05-08", moveRange: [21, 24] as const },
+  { label: "Buffer 🌙", start: "2026-05-15", moveRange: [] as const },
+];
+
 function calculateStreak(
   practiceId: string,
   logs: PracticeLog[],
@@ -1235,6 +1257,254 @@ function YourYear({ months, ouraData }: { months: HistoryMonth[]; ouraData: Oura
   );
 }
 
+function ChinaCalendar({
+  logs,
+  onLog,
+}: {
+  logs: ChinaTaichiLog[];
+  onLog: (entry: { practice_date: string; move_number: number | null; note: string }) => void;
+}) {
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [moveInput, setMoveInput] = useState<string>("");
+  const [noteInput, setNoteInput] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const tripDate = new Date(CHINA_DEPARTURE + "T00:00:00");
+  const now = new Date();
+  const daysRemaining = Math.max(0, Math.ceil((tripDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+
+  // Build log lookup: date → entries
+  const logsByDate = new Map<string, ChinaTaichiLog[]>();
+  for (const log of logs) {
+    const arr = logsByDate.get(log.practice_date) ?? [];
+    arr.push(log);
+    logsByDate.set(log.practice_date, arr);
+  }
+
+  // Current week detection
+  const todayStr = getEffectiveDate();
+  const currentWeekIdx = CHINA_WEEKS.findIndex((w, i) => {
+    const next = CHINA_WEEKS[i + 1];
+    return todayStr >= w.start && (!next || todayStr < next.start);
+  });
+
+  async function handleSave() {
+    if (!selectedDay) return;
+    setSaving(true);
+    const mn = moveInput === "full" ? null : moveInput ? parseInt(moveInput, 10) : null;
+    onLog({ practice_date: selectedDay, move_number: mn, note: noteInput });
+    setSaving(false);
+    setSelectedDay(null);
+    setMoveInput("");
+    setNoteInput("");
+  }
+
+  return (
+    <div>
+      {/* Countdown chip */}
+      <div className="flex justify-center mb-6">
+        <div
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        >
+          <span className="tabular-nums text-[var(--text)]">{daysRemaining}</span>
+          <span className="text-[var(--text-muted)]">days to China ☯️</span>
+        </div>
+      </div>
+
+      {/* Weeks */}
+      <div className="space-y-4">
+        {CHINA_WEEKS.map((week, wi) => {
+          const weekStart = new Date(week.start + "T12:00:00");
+          const days: string[] = [];
+          for (let d = 0; d < 7; d++) {
+            const dt = new Date(weekStart);
+            dt.setDate(dt.getDate() + d);
+            const ds = formatDateLocal(dt);
+            if (ds >= CHINA_DEPARTURE) break;
+            days.push(ds);
+          }
+
+          const isCurrent = wi === currentWeekIdx;
+          const isPast = wi < currentWeekIdx;
+          const moveLabel = week.moveRange.length === 2
+            ? `Moves ${week.moveRange[0]}–${week.moveRange[1]}`
+            : "Review & polish";
+
+          return (
+            <div
+              key={week.label}
+              className="rounded-xl p-3 md:p-4"
+              style={{
+                background: isCurrent ? "var(--accent-glow)" : "var(--bg-card)",
+                border: `1px solid ${isCurrent ? "var(--accent)" : "var(--border)"}`,
+                opacity: isPast ? 0.6 : 1,
+              }}
+            >
+              {/* Week header */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">{week.label}</div>
+                <div className="text-xs text-[var(--text-muted)]">{moveLabel}</div>
+              </div>
+
+              {/* Day grid */}
+              <div className="grid grid-cols-7 gap-1">
+                {days.map((day) => {
+                  const dayEntries = logsByDate.get(day) ?? [];
+                  const dayNum = parseInt(day.slice(8), 10);
+                  const isToday = day === todayStr;
+                  const hasPractice = dayEntries.length > 0;
+                  const isFuture = day > todayStr;
+
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => {
+                        setSelectedDay(day);
+                        setMoveInput("");
+                        setNoteInput("");
+                      }}
+                      className="relative aspect-square flex flex-col items-center justify-center rounded-lg text-xs transition-colors"
+                      style={{
+                        background: hasPractice ? "var(--accent-glow)" : "transparent",
+                        border: isToday
+                          ? "1px solid var(--accent)"
+                          : "1px solid transparent",
+                        opacity: isFuture ? 0.4 : 1,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span className={isToday ? "font-bold" : ""}>{dayNum}</span>
+                      {hasPractice && (
+                        <div className="flex gap-0.5 mt-0.5">
+                          {dayEntries.slice(0, 3).map((e) => (
+                            <div
+                              key={e.id}
+                              className="w-1.5 h-1.5 rounded-full"
+                              style={{ background: "var(--accent)" }}
+                              title={e.move_number ? `Move ${e.move_number}` : "Full run"}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Log modal */}
+      {selectedDay && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.6)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedDay(null); }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-5"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold">
+                Log Practice — {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </h3>
+              <button
+                onClick={() => setSelectedDay(null)}
+                className="text-[var(--text-muted)] hover:text-[var(--text)] text-lg"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Existing entries for this day */}
+            {(() => {
+              const existing = logsByDate.get(selectedDay) ?? [];
+              if (existing.length === 0) return null;
+              return (
+                <div className="mb-3 space-y-1">
+                  <div className="text-xs text-[var(--text-muted)] mb-1">Already logged:</div>
+                  {existing.map((e) => (
+                    <div key={e.id} className="text-xs px-2 py-1 rounded" style={{ background: "var(--accent-glow)" }}>
+                      {e.move_number ? `Move ${e.move_number}` : "Full run"}
+                      {e.note ? ` — ${e.note}` : ""}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Move selector */}
+            <div className="mb-3">
+              <label className="text-xs text-[var(--text-muted)] block mb-1">Move</label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setMoveInput("full")}
+                  className="px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors"
+                  style={{
+                    background: moveInput === "full" ? "var(--accent)" : "var(--bg-card)",
+                    color: moveInput === "full" ? "#000" : "var(--text-muted)",
+                    border: `1px solid ${moveInput === "full" ? "var(--accent)" : "var(--border)"}`,
+                  }}
+                >
+                  Full Run
+                </button>
+                {Array.from({ length: 24 }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setMoveInput(String(n))}
+                    className="w-7 h-7 rounded-full text-[11px] font-medium transition-colors flex items-center justify-center"
+                    style={{
+                      background: moveInput === String(n) ? "var(--accent)" : "transparent",
+                      color: moveInput === String(n) ? "#000" : "var(--text-muted)",
+                      border: `1px solid ${moveInput === String(n) ? "var(--accent)" : "var(--border)"}`,
+                    }}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Note */}
+            <div className="mb-4">
+              <label className="text-xs text-[var(--text-muted)] block mb-1">Note (optional)</label>
+              <input
+                type="text"
+                value={noteInput}
+                onChange={(e) => setNoteInput(e.target.value)}
+                placeholder="How did it feel?"
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                style={{
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text)",
+                }}
+              />
+            </div>
+
+            {/* Save */}
+            <button
+              onClick={handleSave}
+              disabled={saving || (!moveInput)}
+              className="w-full py-2 rounded-lg text-sm font-medium transition-colors"
+              style={{
+                background: moveInput ? "var(--accent)" : "var(--border)",
+                color: moveInput ? "#000" : "var(--text-muted)",
+                cursor: moveInput ? "pointer" : "default",
+              }}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [practices, setPractices] = useState<PracticeType[]>([]);
   const [logs, setLogs] = useState<PracticeLog[]>([]);
@@ -1246,6 +1516,15 @@ export default function Dashboard() {
   const [wotLogs, setWotLogs] = useState<WotEntry[]>([]);
   const [historyMonths, setHistoryMonths] = useState<HistoryMonth[] | null>(null);
   const [focusmateData, setFocusmateData] = useState<FocusmateData | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("practice");
+  const [chinaLogs, setChinaLogs] = useState<ChinaTaichiLog[]>([]);
+
+  const fetchChinaLogs = useCallback(() => {
+    fetch("/api/china-log")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (Array.isArray(data)) setChinaLogs(data); })
+      .catch(() => {});
+  }, []);
 
   const fetchData = useCallback(async () => {
     const effectiveDate = getEffectiveDate();
@@ -1294,7 +1573,10 @@ export default function Dashboard() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data && !data.error) setFocusmateData(data); })
       .catch(() => {});
-  }, []);
+
+    // Fetch China tai chi logs (non-blocking)
+    fetchChinaLogs();
+  }, [fetchChinaLogs]);
 
   useEffect(() => {
     fetchData();
@@ -1347,6 +1629,39 @@ export default function Dashboard() {
         <TripCountdown inline />
       </div>
 
+      {/* Tab toggle */}
+      <div className="flex gap-1.5 mb-6">
+        {([["practice", "Practice"], ["china", "China ☯️"]] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              background: activeTab === key ? "var(--accent)" : "var(--bg-card)",
+              color: activeTab === key ? "#000" : "var(--text-muted)",
+              border: `1px solid ${activeTab === key ? "var(--accent)" : "var(--border)"}`,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "china" && (
+        <ChinaCalendar
+          logs={chinaLogs}
+          onLog={async (entry) => {
+            await fetch("/api/china-log", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(entry),
+            });
+            fetchChinaLogs();
+          }}
+        />
+      )}
+
+      {activeTab === "practice" && <>
       {/* Tonight card — only after 9 PM */}
       <TonightCard logs={logs} practices={practices} today={today} sleepData={ouraData?.sleep ?? []} />
 
@@ -1871,6 +2186,7 @@ export default function Dashboard() {
       {ouraData && <PatternsSection logs={logs} ouraData={ouraData} />}
 
       {historyMonths && <YourYear months={historyMonths} ouraData={ouraData} />}
+      </>}
 
     </main>
   );
