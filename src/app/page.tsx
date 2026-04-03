@@ -1048,11 +1048,11 @@ function FlowTimer({
   // --- Completion screen ---
   if (justCompleted) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={bgStyle}>
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden" style={bgStyle}>
         <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.65)" }} />
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 z-10 text-white/60 hover:text-white text-2xl font-light transition-colors"
+          className="absolute top-6 right-6 z-10 text-white/80 hover:text-white text-4xl font-light transition-colors w-12 h-12 flex items-center justify-center"
         >
           ×
         </button>
@@ -1114,7 +1114,7 @@ function FlowTimer({
     ];
 
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={bgStyle}>
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden" style={bgStyle}>
         <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.50)" }} />
         {/* Ambient particle CSS */}
         <style>{`
@@ -1148,7 +1148,7 @@ function FlowTimer({
         ))}
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 z-10 text-white/60 hover:text-white text-2xl font-light transition-colors"
+          className="absolute top-6 right-6 z-10 text-white/80 hover:text-white text-4xl font-light transition-colors w-12 h-12 flex items-center justify-center"
         >
           ×
         </button>
@@ -1244,11 +1244,11 @@ function FlowTimer({
 
   // --- Pre-start screen: duration selector on immersive background ---
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={bgStyle}>
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden" style={bgStyle}>
       <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.75)" }} />
       <button
         onClick={onClose}
-        className="absolute top-6 right-6 z-10 text-white/60 hover:text-white text-2xl font-light transition-colors"
+        className="absolute top-6 right-6 z-10 text-white/80 hover:text-white text-4xl font-light transition-colors w-12 h-12 flex items-center justify-center"
       >
         ×
       </button>
