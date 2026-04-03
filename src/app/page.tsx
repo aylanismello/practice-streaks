@@ -2637,21 +2637,7 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Today's Flows */}
-      {todayFlows.length > 0 && (
-        <div
-          className="rounded-xl p-3 md:p-4 mb-6 md:mb-8 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform"
-          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-          onClick={() => setFlowOpen(true)}
-        >
-          <div className="text-lg tracking-wider">
-            {todayFlows.map((_, i) => <span key={i}>🌊</span>)}
-          </div>
-          <div className="text-sm text-[var(--text-muted)]">
-            {todayFlows.length} 🌊 · {Math.floor(todayFlowMinutes / 60) > 0 ? `${Math.floor(todayFlowMinutes / 60)}h ` : ""}{todayFlowMinutes % 60}m focused today
-          </div>
-        </div>
-      )}
+
 
       {/* History view with time navigation */}
       {(() => {
