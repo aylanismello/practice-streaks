@@ -1559,6 +1559,39 @@ export default function Dashboard() {
   const [focusmateData, setFocusmateData] = useState<FocusmateData | null>(null);
   const [chinaMode, setChinaMode] = useState(false);
   const [chinaEntries, setChinaEntries] = useState<ChinaPrepEntry[]>([]);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const togglePractice = useCallback(async (practiceId: string, isDone: boolean) => {
+    if (!today || timeOffset !== 0) return;
+    setTogglingId(practiceId);
+    try {
+      if (isDone) {
+        await fetch("/api/log", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ practice_id: practiceId, date: today }),
+        });
+      } else {
+        await fetch("/api/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ practice_id: practiceId, date: today }),
+        });
+      }
+      // Refetch logs
+      const streakStart = new Date(today + "T12:00:00");
+      streakStart.setDate(streakStart.getDate() - 60);
+      const streakStartStr = formatDateLocal(streakStart);
+      const { data } = await supabase
+        .from("practice_log")
+        .select("practice_date, practice_id")
+        .gte("practice_date", streakStartStr)
+        .lte("practice_date", today);
+      if (data) setLogs(data);
+    } finally {
+      setTogglingId(null);
+    }
+  }, [today, timeOffset]);
 
   const fetchChinaData = useCallback(async () => {
     try {
@@ -1715,12 +1748,13 @@ export default function Dashboard() {
           return (
             <div
               key={practice.id}
-              className="animate-fade-in rounded-xl p-3 md:p-4 transition-colors duration-200"
+              className={`animate-fade-in rounded-xl p-3 md:p-4 transition-all duration-200${timeOffset === 0 ? " cursor-pointer active:scale-95" : ""}${togglingId === practice.id ? " opacity-50" : ""}`}
               style={{
                 animationDelay: `${i * 50}ms`,
                 background: done ? "var(--accent-glow)" : "var(--bg-card)",
                 border: `1px solid ${done ? "var(--accent)" : atRisk ? "rgba(255,165,0,0.3)" : "var(--border)"}`,
               }}
+              onClick={() => timeOffset === 0 && !togglingId && togglePractice(practice.id, done)}
             >
               <div className="flex items-start justify-between mb-2">
                 <span className="text-2xl md:text-3xl">{practice.emoji}</span>
