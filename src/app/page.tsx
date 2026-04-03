@@ -1078,10 +1078,9 @@ function FlowTimer({
   if (running) {
     const totalSeconds = duration * 60;
     const progress = totalSeconds > 0 ? secondsLeft / totalSeconds : 0;
-    const ringSize = 280;
-    const ringSizeMobile = 220;
-    const strokeWidth = 3;
-    const bgStrokeWidth = 2;
+    const ringSize = 320;
+    const ringSizeMobile = 260;
+    const strokeWidth = 1.5;
     const radius = (ringSize - strokeWidth * 2) / 2;
     const radiusMobile = (ringSizeMobile - strokeWidth * 2) / 2;
     const circumference = 2 * Math.PI * radius;
@@ -1089,9 +1088,49 @@ function FlowTimer({
     const dashoffset = circumference * (1 - progress);
     const dashoffsetMobile = circumferenceMobile * (1 - progress);
 
+    // Ambient mist particles — positions and timing
+    const particles = [
+      { left: "15%", delay: "0s", duration: "14s", opacity: 0.12 },
+      { left: "35%", delay: "3s", duration: "18s", opacity: 0.08 },
+      { left: "55%", delay: "7s", duration: "16s", opacity: 0.15 },
+      { left: "72%", delay: "2s", duration: "20s", opacity: 0.1 },
+      { left: "88%", delay: "5s", duration: "15s", opacity: 0.07 },
+      { left: "48%", delay: "10s", duration: "17s", opacity: 0.13 },
+    ];
+
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={bgStyle}>
-        <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)" }} />
+        <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.50)" }} />
+        {/* Ambient particle CSS */}
+        <style>{`
+          @keyframes mist-rise {
+            0% { transform: translateY(0) translateX(0); opacity: 0; }
+            10% { opacity: var(--p-opacity); }
+            90% { opacity: var(--p-opacity); }
+            100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
+          }
+          @keyframes breathe-timer {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.01); }
+          }
+        `}</style>
+        {/* Ambient mist particles */}
+        {particles.map((p, i) => (
+          <div
+            key={i}
+            className="absolute z-10 rounded-full"
+            style={{
+              width: 3,
+              height: 3,
+              background: "white",
+              left: p.left,
+              bottom: "-10px",
+              ["--p-opacity" as string]: p.opacity,
+              opacity: 0,
+              animation: `mist-rise ${p.duration} ${p.delay} infinite ease-in-out`,
+            }}
+          />
+        ))}
         <button
           onClick={onClose}
           className="absolute top-6 right-6 z-10 text-white/60 hover:text-white text-2xl font-light transition-colors"
@@ -1104,67 +1143,76 @@ function FlowTimer({
             <svg className="absolute inset-0 block md:hidden" width={ringSizeMobile} height={ringSizeMobile} viewBox={`0 0 ${ringSizeMobile} ${ringSizeMobile}`}>
               <circle
                 cx={ringSizeMobile / 2} cy={ringSizeMobile / 2} r={radiusMobile}
-                fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={bgStrokeWidth}
+                fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth}
               />
               <circle
                 cx={ringSizeMobile / 2} cy={ringSizeMobile / 2} r={radiusMobile}
-                fill="none" stroke="#38bdf8" strokeWidth={strokeWidth}
+                fill="none" stroke="rgba(56,189,248,0.4)" strokeWidth={strokeWidth}
                 strokeLinecap="round"
                 strokeDasharray={circumferenceMobile}
                 strokeDashoffset={dashoffsetMobile}
                 transform={`rotate(-90 ${ringSizeMobile / 2} ${ringSizeMobile / 2})`}
-                style={{ filter: "drop-shadow(0 0 8px rgba(56, 189, 248, 0.4))", transition: "stroke-dashoffset 0.5s linear" }}
+                style={{ transition: "stroke-dashoffset 0.5s linear" }}
               />
             </svg>
             <svg className="absolute inset-0 hidden md:block" width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ left: -(ringSize - ringSizeMobile) / 2, top: -(ringSize - ringSizeMobile) / 2 }}>
               <circle
                 cx={ringSize / 2} cy={ringSize / 2} r={radius}
-                fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={bgStrokeWidth}
+                fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth}
               />
               <circle
                 cx={ringSize / 2} cy={ringSize / 2} r={radius}
-                fill="none" stroke="#38bdf8" strokeWidth={strokeWidth}
+                fill="none" stroke="rgba(56,189,248,0.4)" strokeWidth={strokeWidth}
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={dashoffset}
                 transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
-                style={{ filter: "drop-shadow(0 0 8px rgba(56, 189, 248, 0.4))", transition: "stroke-dashoffset 0.5s linear" }}
+                style={{ transition: "stroke-dashoffset 0.5s linear" }}
               />
             </svg>
             <div
-              className="relative text-8xl md:text-9xl font-extralight tabular-nums text-white"
+              className="relative text-7xl md:text-8xl font-light tabular-nums text-white"
               style={{
-                textShadow: "0 2px 30px rgba(0,0,0,0.5)",
+                textShadow: "0 2px 30px rgba(0,0,0,0.3)",
                 fontVariantNumeric: "tabular-nums",
+                letterSpacing: "0.05em",
+                animation: "breathe-timer 6s ease-in-out infinite",
               }}
             >
               {`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
             </div>
           </div>
-          {/* Hold to stop — subtle, at bottom */}
-          <div className="mt-16">
+          {/* Tiny × dismiss — hold to stop */}
+          <div className="mt-24">
             <div
-              className="relative rounded-full px-8 py-3 text-sm font-medium select-none cursor-pointer overflow-hidden"
-              style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.15)" }}
+              className="relative select-none cursor-pointer text-base font-light transition-opacity"
+              style={{ color: "rgba(255,255,255,0.2)", fontSize: 16, lineHeight: 1 }}
               onMouseDown={startHold}
               onMouseUp={endHold}
-              onMouseLeave={endHold}
+              onMouseLeave={(e) => { endHold(); (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.2)"; }}
               onTouchStart={startHold}
               onTouchEnd={endHold}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.4)"; }}
             >
-              <div
-                className="absolute inset-0 rounded-full"
-                style={{
-                  background: "rgba(255,255,255,0.2)",
-                  width: `${holdProgress}%`,
-                  transition: "width 50ms linear",
-                }}
-              />
-              <span className="relative z-10">Hold to Stop</span>
+              {holdProgress > 0 ? (
+                <svg width={24} height={24} viewBox="0 0 24 24" className="block">
+                  <circle cx={12} cy={12} r={10} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1.5} />
+                  <circle
+                    cx={12} cy={12} r={10} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth={1.5}
+                    strokeDasharray={2 * Math.PI * 10}
+                    strokeDashoffset={2 * Math.PI * 10 * (1 - holdProgress / 100)}
+                    transform="rotate(-90 12 12)"
+                    strokeLinecap="round"
+                  />
+                  <text x={12} y={13} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize={12} fontWeight={300}>×</text>
+                </svg>
+              ) : (
+                <span>×</span>
+              )}
             </div>
           </div>
           {sessionWaves.length > 0 && (
-            <div className="mt-8 text-2xl tracking-wide">
+            <div className="mt-10 text-2xl tracking-wide" style={{ opacity: 0.6 }}>
               {sessionWaves.map((_, i) => <span key={i}>🌊</span>)}
             </div>
           )}
