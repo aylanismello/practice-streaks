@@ -1204,34 +1204,38 @@ function FlowTimer({
               {`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
             </div>
           </div>
-          {/* Tiny × dismiss — hold to stop */}
-          <div className="mt-24">
+          {/* Stop button — hold to stop */}
+          <div className="mt-12">
             <div
-              className="relative select-none cursor-pointer text-base font-light transition-opacity"
-              style={{ color: "rgba(255,255,255,0.2)", fontSize: 16, lineHeight: 1 }}
+              className="relative select-none cursor-pointer flex items-center justify-center rounded-full transition-all"
+              style={{
+                width: 56,
+                height: 56,
+                background: "rgba(0,0,0,0.5)",
+                backdropFilter: "blur(8px)",
+                border: "1px solid rgba(255,255,255,0.2)",
+              }}
               onMouseDown={startHold}
               onMouseUp={endHold}
-              onMouseLeave={(e) => { endHold(); (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.2)"; }}
+              onMouseLeave={() => endHold()}
               onTouchStart={startHold}
               onTouchEnd={endHold}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.4)"; }}
             >
               {holdProgress > 0 ? (
-                <svg width={24} height={24} viewBox="0 0 24 24" className="block">
-                  <circle cx={12} cy={12} r={10} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1.5} />
+                <svg width={44} height={44} viewBox="0 0 44 44" className="absolute">
+                  <circle cx={22} cy={22} r={19} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={2} />
                   <circle
-                    cx={12} cy={12} r={10} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth={1.5}
-                    strokeDasharray={2 * Math.PI * 10}
-                    strokeDashoffset={2 * Math.PI * 10 * (1 - holdProgress / 100)}
-                    transform="rotate(-90 12 12)"
+                    cx={22} cy={22} r={19} fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth={2}
+                    strokeDasharray={2 * Math.PI * 19}
+                    strokeDashoffset={2 * Math.PI * 19 * (1 - holdProgress / 100)}
+                    transform="rotate(-90 22 22)"
                     strokeLinecap="round"
                   />
-                  <text x={12} y={13} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize={12} fontWeight={300}>×</text>
                 </svg>
-              ) : (
-                <span>×</span>
-              )}
+              ) : null}
+              <span className="text-white/70 text-2xl font-light">×</span>
             </div>
+            <div className="text-white/30 text-[10px] mt-2 text-center">hold to stop</div>
           </div>
           {sessionWaves.length > 0 && (
             <div className="mt-10 text-2xl tracking-wide" style={{ opacity: 0.6 }}>
