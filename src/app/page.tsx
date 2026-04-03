@@ -940,69 +940,33 @@ function PomoTimer({
   open,
   onClose,
   pomoLogs,
-  onPomoComplete,
+  duration,
+  onDurationChange,
+  running,
+  secondsLeft,
+  sessionTomatoes,
+  justCompleted,
+  onStart,
+  onStop,
+  onSecondsLeftChange,
 }: {
   open: boolean;
   onClose: () => void;
   pomoLogs: PomoLog[];
-  onPomoComplete: (durationMin: number) => Promise<void>;
+  duration: number;
+  onDurationChange: (d: number) => void;
+  running: boolean;
+  secondsLeft: number;
+  sessionTomatoes: number[];
+  justCompleted: boolean;
+  onStart: () => void;
+  onStop: () => void;
+  onSecondsLeftChange: (s: number) => void;
 }) {
-  const [duration, setDuration] = useState(20);
-  const [running, setRunning] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(20 * 60);
-  const [sessionTomatoes, setSessionTomatoes] = useState<number[]>([]);
-  const [justCompleted, setJustCompleted] = useState(false);
   const [holdProgress, setHoldProgress] = useState(0);
   const [editingDuration, setEditingDuration] = useState(false);
   const customInputRef = useRef<HTMLInputElement | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoStartedRef = useRef(false);
-
-  // Countdown logic
-  useEffect(() => {
-    if (!running) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      return;
-    }
-    intervalRef.current = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          // Timer complete
-          clearInterval(intervalRef.current!);
-          setRunning(false);
-          setJustCompleted(true);
-          playChime();
-          onPomoComplete(duration).then(() => {
-            setSessionTomatoes((t) => [...t, duration]);
-          });
-          // Auto-reset and start after 3 seconds
-          autoStartedRef.current = true;
-          setTimeout(() => {
-            setJustCompleted(false);
-            setSecondsLeft(duration * 60);
-            setRunning(true);
-          }, 3000);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, duration, onPomoComplete]);
-
-  const startTimer = () => {
-    setSecondsLeft(duration * 60);
-    setRunning(true);
-    autoStartedRef.current = false;
-  };
-
-  const stopTimer = () => {
-    setRunning(false);
-    setJustCompleted(false);
-    setSecondsLeft(duration * 60);
-    autoStartedRef.current = false;
-  };
 
   const startHold = () => {
     setHoldProgress(0);
@@ -1012,7 +976,7 @@ function PomoTimer({
       setHoldProgress(p);
       if (p >= 100) {
         if (holdTimerRef.current) clearInterval(holdTimerRef.current);
-        stopTimer();
+        onStop();
       }
     }, 50);
   };
@@ -1039,6 +1003,7 @@ function PomoTimer({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         className="relative w-full max-w-md mx-4 rounded-3xl p-8 flex flex-col items-center"
@@ -1049,13 +1014,13 @@ function PomoTimer({
           border: "1px solid rgba(245,158,11,0.15)",
         }}
       >
-        {/* Close / Done for now */}
+        {/* Close / Minimize */}
         <button
-          onClick={() => { if (running) stopTimer(); onClose(); }}
+          onClick={onClose}
           className="absolute top-4 right-4 text-sm font-medium rounded-full px-3 py-1"
           style={{ color: "#f59e0b", background: "rgba(245,158,11,0.1)" }}
         >
-          {running ? "Done for now" : "Close"}
+          {running ? "Minimize" : "Close"}
         </button>
 
         {/* Title */}
@@ -1066,7 +1031,7 @@ function PomoTimer({
         {/* Big timer */}
         <div
           className="text-7xl font-light tabular-nums tracking-tight my-6"
-          style={{ color: justCompleted ? "#f59e0b" : "#f59e0b", fontVariantNumeric: "tabular-nums" }}
+          style={{ color: "#f59e0b", fontVariantNumeric: "tabular-nums" }}
         >
           {justCompleted ? (
             <span className="text-6xl">🍅 Done!</span>
@@ -1083,15 +1048,15 @@ function PomoTimer({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     const v = Math.max(1, Math.min(120, parseInt((e.target as HTMLInputElement).value) || 20));
-                    setDuration(v);
-                    setSecondsLeft(v * 60);
+                    onDurationChange(v);
+                    onSecondsLeftChange(v * 60);
                     setEditingDuration(false);
                   }
                 }}
                 onBlur={(e) => {
                   const v = Math.max(1, Math.min(120, parseInt(e.target.value) || 20));
-                  setDuration(v);
-                  setSecondsLeft(v * 60);
+                  onDurationChange(v);
+                  onSecondsLeftChange(v * 60);
                   setEditingDuration(false);
                 }}
                 autoFocus
@@ -1115,7 +1080,7 @@ function PomoTimer({
             {[15, 20, 25, 30, 45, 60].map((d) => (
               <button
                 key={d}
-                onClick={() => { setDuration(d); setSecondsLeft(d * 60); }}
+                onClick={() => { onDurationChange(d); onSecondsLeftChange(d * 60); }}
                 className="rounded-full px-4 py-1.5 text-sm font-medium transition-all"
                 style={{
                   background: duration === d ? "#f59e0b" : "rgba(245,158,11,0.08)",
@@ -1132,7 +1097,7 @@ function PomoTimer({
         {/* Start / Hold-to-stop */}
         {!running && !justCompleted && (
           <button
-            onClick={startTimer}
+            onClick={onStart}
             className="rounded-full px-10 py-3 text-lg font-semibold transition-all active:scale-95"
             style={{ background: "#f59e0b", color: "#1a1a2e" }}
           >
@@ -1180,6 +1145,167 @@ function PomoTimer({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function PomoHistoryView({ pomoLogs }: { pomoLogs: PomoLog[] }) {
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+
+  const now = new Date();
+  const viewDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+  const monthLabel = viewDate.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
+  const todayStr = formatDateLocal(now);
+
+  // Build lookup: date -> PomoLog[]
+  const logsByDate = new Map<string, PomoLog[]>();
+  for (const log of pomoLogs) {
+    const existing = logsByDate.get(log.date) || [];
+    existing.push(log);
+    logsByDate.set(log.date, existing);
+  }
+
+  // Stats
+  const totalPomos = pomoLogs.length;
+  const totalMinutes = pomoLogs.reduce((a, p) => a + p.duration_min, 0);
+  const totalHours = Math.round(totalMinutes / 60 * 10) / 10;
+
+  // Streak: consecutive days with at least 1 pomo
+  let streak = 0;
+  const checkDate = new Date(now);
+  if (!logsByDate.has(todayStr)) {
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+  for (;;) {
+    const ds = formatDateLocal(checkDate);
+    if (logsByDate.has(ds)) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  // Build month grid
+  const firstOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+  const startDow = firstOfMonth.getDay();
+  const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+  const cells: (string | null)[] = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const y = viewDate.getFullYear();
+    const m = String(viewDate.getMonth() + 1).padStart(2, "0");
+    cells.push(`${y}-${m}-${String(d).padStart(2, "0")}`);
+  }
+
+  const selectedLogs = selectedDay ? (logsByDate.get(selectedDay) || []) : [];
+  const selectedCount = selectedLogs.length;
+  const selectedMinutes = selectedLogs.reduce((a, p) => a + p.duration_min, 0);
+
+  return (
+    <div className="animate-fade-in">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-2 mb-6">
+        {[
+          { label: "Total 🍅", value: totalPomos },
+          { label: "Focus hours", value: totalHours },
+          { label: "Day streak", value: streak },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-xl p-3 text-center"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          >
+            <div className="text-lg md:text-xl font-semibold tabular-nums">{stat.value}</div>
+            <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Month Calendar */}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wider mb-2">
+          <button
+            onClick={() => setMonthOffset(monthOffset - 1)}
+            className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-sm px-1"
+          >
+            &lsaquo;
+          </button>
+          <span className="text-[var(--text-muted)]">{monthLabel}</span>
+          {monthOffset < 0 && (
+            <button
+              onClick={() => setMonthOffset(monthOffset + 1)}
+              className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-sm px-1"
+            >
+              &rsaquo;
+            </button>
+          )}
+        </div>
+        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-3 md:p-4">
+          {/* Day headers */}
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+              <div key={i} className="text-center text-[10px] text-[var(--text-muted)] pb-1">{d}</div>
+            ))}
+          </div>
+          {/* Day cells */}
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((day, i) => {
+              if (!day) return <div key={`empty-${i}`} />;
+              const dayLogs = logsByDate.get(day) || [];
+              const count = dayLogs.length;
+              const isToday = day === todayStr;
+              const isSelected = day === selectedDay;
+
+              return (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDay(selectedDay === day ? null : day)}
+                  className="relative aspect-square rounded-lg flex flex-col items-center justify-center text-xs transition-all duration-150"
+                  style={{
+                    background: isSelected
+                      ? "rgba(245,158,11,0.2)"
+                      : count > 0
+                      ? "rgba(245,158,11,0.06)"
+                      : "transparent",
+                    border: isToday
+                      ? "1px solid rgba(245,158,11,0.4)"
+                      : count > 0
+                      ? "1px solid rgba(245,158,11,0.15)"
+                      : "1px solid var(--border)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span className="text-[10px] text-[var(--text-muted)] leading-none mb-0.5">
+                    {parseInt(day.slice(8, 10), 10)}
+                  </span>
+                  {count > 0 && (
+                    <span className="text-amber-400 font-semibold text-[11px] leading-none">
+                      {count > 1 ? `${count}🍅` : "🍅"}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Selected day detail */}
+      {selectedDay && selectedCount > 0 && (
+        <div
+          className="rounded-xl p-3 md:p-4 mb-4"
+          style={{ background: "var(--bg-card)", border: "1px solid rgba(245,158,11,0.2)" }}
+        >
+          <div className="text-sm font-medium mb-1" style={{ color: "#f59e0b" }}>
+            {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+          </div>
+          <div className="text-sm text-[var(--text-muted)]">
+            {selectedCount} 🍅 · {selectedMinutes}m focused
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1836,6 +1962,14 @@ export default function Dashboard() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [pomoOpen, setPomoOpen] = useState(false);
   const [pomoLogs, setPomoLogs] = useState<PomoLog[]>([]);
+  const [pomoDuration, setPomoDuration] = useState(20);
+  const [pomoRunning, setPomoRunning] = useState(false);
+  const [pomoSecondsLeft, setPomoSecondsLeft] = useState(20 * 60);
+  const [pomoSessionTomatoes, setPomoSessionTomatoes] = useState<number[]>([]);
+  const [pomoJustCompleted, setPomoJustCompleted] = useState(false);
+  const [pomoHistoryMode, setPomoHistoryMode] = useState(false);
+  const pomoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pomoAutoStartedRef = useRef(false);
 
   const togglePractice = useCallback(async (practiceId: string, isDone: boolean) => {
     if (!today || timeOffset !== 0) return;
@@ -1927,6 +2061,49 @@ export default function Dashboard() {
       await fetchPomoData();
     } catch { /* ignore */ }
   }, [fetchPomoData]);
+
+  // Pomo countdown runs at Dashboard level so it persists when modal is closed
+  useEffect(() => {
+    if (!pomoRunning) {
+      if (pomoIntervalRef.current) clearInterval(pomoIntervalRef.current);
+      return;
+    }
+    pomoIntervalRef.current = setInterval(() => {
+      setPomoSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(pomoIntervalRef.current!);
+          setPomoRunning(false);
+          setPomoJustCompleted(true);
+          playChime();
+          handlePomoComplete(pomoDuration).then(() => {
+            setPomoSessionTomatoes((t) => [...t, pomoDuration]);
+          });
+          pomoAutoStartedRef.current = true;
+          setTimeout(() => {
+            setPomoJustCompleted(false);
+            setPomoSecondsLeft(pomoDuration * 60);
+            setPomoRunning(true);
+          }, 3000);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => { if (pomoIntervalRef.current) clearInterval(pomoIntervalRef.current); };
+  }, [pomoRunning, pomoDuration, handlePomoComplete]);
+
+  const startPomo = useCallback(() => {
+    setPomoSecondsLeft(pomoDuration * 60);
+    setPomoRunning(true);
+    pomoAutoStartedRef.current = false;
+  }, [pomoDuration]);
+
+  const stopPomo = useCallback(() => {
+    setPomoRunning(false);
+    setPomoJustCompleted(false);
+    setPomoSecondsLeft(pomoDuration * 60);
+    pomoAutoStartedRef.current = false;
+  }, [pomoDuration]);
 
   const fetchData = useCallback(async () => {
     const effectiveDate = getEffectiveDate();
@@ -2029,7 +2206,15 @@ export default function Dashboard() {
         open={pomoOpen}
         onClose={() => setPomoOpen(false)}
         pomoLogs={pomoLogs}
-        onPomoComplete={handlePomoComplete}
+        duration={pomoDuration}
+        onDurationChange={setPomoDuration}
+        running={pomoRunning}
+        secondsLeft={pomoSecondsLeft}
+        sessionTomatoes={pomoSessionTomatoes}
+        justCompleted={pomoJustCompleted}
+        onStart={startPomo}
+        onStop={stopPomo}
+        onSecondsLeftChange={setPomoSecondsLeft}
       />
 
       {/* Header with countdown */}
@@ -2043,28 +2228,64 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-start gap-2">
-          <button
-            onClick={() => setPomoOpen(true)}
-            className="relative text-2xl md:text-3xl transition-all duration-200 hover:scale-110 active:scale-95 mt-1"
-            style={{ opacity: todayPomos.length > 0 ? 1 : 0.5, cursor: "pointer", background: "none", border: "none" }}
-            title="Pomodoro Timer"
-          >
-            🍅
-            {todayPomos.length > 0 && (
-              <span
-                className="absolute -top-1 -right-2 text-[10px] font-bold tabular-nums"
-                style={{ color: "var(--text)" }}
-              >
-                {todayPomos.length}
+          {pomoRunning && !pomoOpen ? (
+            <button
+              onClick={() => setPomoOpen(true)}
+              className="flex items-center gap-1 text-sm md:text-base font-semibold tabular-nums rounded-full px-3 py-1 mt-1 transition-all duration-200 hover:scale-105 active:scale-95"
+              style={{
+                color: "#f59e0b",
+                background: "rgba(245,158,11,0.1)",
+                border: "1px solid rgba(245,158,11,0.3)",
+                cursor: "pointer",
+                animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+              }}
+              title="Timer running — tap to open"
+            >
+              <span>🍅</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                {`${String(Math.floor(pomoSecondsLeft / 60)).padStart(2, "0")}:${String(pomoSecondsLeft % 60).padStart(2, "0")}`}
               </span>
-            )}
+            </button>
+          ) : (
+            <button
+              onClick={() => setPomoOpen(true)}
+              className="relative text-2xl md:text-3xl transition-all duration-200 hover:scale-110 active:scale-95 mt-1"
+              style={{ opacity: todayPomos.length > 0 ? 1 : 0.5, cursor: "pointer", background: "none", border: "none" }}
+              title="Pomodoro Timer"
+            >
+              🍅
+              {todayPomos.length > 0 && (
+                <span
+                  className="absolute -top-1 -right-2 text-[10px] font-bold tabular-nums"
+                  style={{ color: "var(--text)" }}
+                >
+                  {todayPomos.length}
+                </span>
+              )}
+            </button>
+          )}
+          <button
+            onClick={() => { setPomoHistoryMode(!pomoHistoryMode); if (!pomoHistoryMode) setChinaMode(false); }}
+            className="text-2xl md:text-3xl transition-all duration-200 hover:scale-110 active:scale-95 mt-1"
+            style={{
+              cursor: "pointer",
+              background: "none",
+              border: "none",
+              opacity: pomoHistoryMode ? 1 : 0.5,
+              filter: pomoHistoryMode ? "drop-shadow(0 0 4px rgba(245,158,11,0.4))" : "none",
+            }}
+            title="Pomodoro History"
+          >
+            📅
           </button>
-          <TripCountdown inline onClick={() => setChinaMode(!chinaMode)} isActive={chinaMode} />
+          <TripCountdown inline onClick={() => { setChinaMode(!chinaMode); if (!chinaMode) setPomoHistoryMode(false); }} isActive={chinaMode} />
         </div>
       </div>
 
       {chinaMode ? (
         <ChinaPrepView entries={chinaEntries} onSave={handleChinaSave} onDelete={handleChinaDelete} />
+      ) : pomoHistoryMode ? (
+        <PomoHistoryView pomoLogs={pomoLogs} />
       ) : (<>
 
       {/* Tonight card — only after 9 PM */}
