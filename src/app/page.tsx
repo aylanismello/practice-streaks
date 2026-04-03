@@ -12,11 +12,13 @@ import {
 } from "@/lib/dates";
 import type { ViewMode } from "@/lib/dates";
 
-const TARGET_BEDTIME = "23:00"; // 11:00 PM Pacific — TODO: read from supabase
+const TARGET_BEDTIME = "00:00"; // midnight Pacific — TODO: read from supabase
+const ROUTINE_WINDOW = "22:30"; // 10:30 PM Pacific
+const WAKE_TARGET = "08:30"; // 8:30 AM Pacific
 const TRACKING_START = "2026-03-21"; // First day practices were logged
 
 interface OuraData {
-  sleep: { average_hrv: number | null; day: string; bedtime_start: string | null }[];
+  sleep: { average_hrv: number | null; day: string; bedtime_start: string | null; bedtime_end: string | null }[];
   readiness: { score: number; day: string }[];
   resilience: { level: string; day: string }[];
   dailySleep: { score: number; day: string }[];
@@ -264,6 +266,64 @@ function formatTime12h(minutes: number): string {
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
+type FrameStatus = "complete" | "partial" | "missed";
+
+interface SleepFrame {
+  slept_on_time: boolean;
+  woke_on_time: boolean;
+  status: FrameStatus;
+}
+
+/** Pick the longest (nighttime) sleep entry per day — filters out naps by choosing latest evening bedtime_start */
+function getLongestSleepByDay(sleepData: OuraData["sleep"]): Map<string, OuraData["sleep"][number]> {
+  const byDay = new Map<string, OuraData["sleep"][number]>();
+  for (const s of sleepData) {
+    if (!s.bedtime_start && !s.bedtime_end) continue;
+    const existing = byDay.get(s.day);
+    if (!existing) {
+      byDay.set(s.day, s);
+    } else {
+      // Prefer entry with later bedtime_start (nighttime sleep, not afternoon nap)
+      const existingStart = existing.bedtime_start ?? "";
+      const newStart = s.bedtime_start ?? "";
+      if (newStart > existingStart) byDay.set(s.day, s);
+    }
+  }
+  return byDay;
+}
+
+function scoreSleepFrame(entry: OuraData["sleep"][number]): SleepFrame | null {
+  const { bedtime_start, bedtime_end } = entry;
+  if (!bedtime_start && !bedtime_end) return null;
+
+  // Parse bedtime_start time in Pacific — ISO like "2026-04-01T00:40:27-07:00"
+  let slept_on_time = false;
+  if (bedtime_start) {
+    const ptBed = new Date(new Date(bedtime_start).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+    const bedMinutes = ptBed.getHours() * 60 + ptBed.getMinutes();
+    // On time = bedtime_start time <= midnight (00:00)
+    // Normalize: evening times (18:00-23:59) and midnight (0:00) are on time
+    // After midnight (0:01+) is late — but we use the normalize trick
+    const normalized = bedMinutes >= 18 * 60 ? bedMinutes - 24 * 60 : bedMinutes;
+    slept_on_time = normalized <= 0; // <= midnight
+  }
+
+  let woke_on_time = false;
+  if (bedtime_end) {
+    const ptWake = new Date(new Date(bedtime_end).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+    const wakeMinutes = ptWake.getHours() * 60 + ptWake.getMinutes();
+    const wakeTarget = getTargetMinutes(WAKE_TARGET); // 8:30 = 510
+    woke_on_time = wakeMinutes <= wakeTarget;
+  }
+
+  const bothHit = slept_on_time && woke_on_time;
+  const oneHit = slept_on_time || woke_on_time;
+  return {
+    slept_on_time,
+    woke_on_time,
+    status: bothHit ? "complete" : oneHit ? "partial" : "missed",
+  };
+}
 
 function BedtimeCard({ sleepData, today, logs, practices }: { sleepData: OuraData["sleep"]; today: string; logs: PracticeLog[]; practices: PracticeType[] }) {
   const targetMin = getTargetMinutes(TARGET_BEDTIME);
@@ -497,10 +557,12 @@ function TonightCard({
   logs,
   practices,
   today,
+  sleepData,
 }: {
   logs: PracticeLog[];
   practices: PracticeType[];
   today: string;
+  sleepData: OuraData["sleep"];
 }) {
   const [now, setNow] = useState(() => new Date());
 
@@ -511,6 +573,7 @@ function TonightCard({
 
   const nowPT = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
   const nowHour = nowPT.getHours();
+  const nowMinutes = nowPT.getHours() * 60 + nowPT.getMinutes();
 
   // Only show after 9 PM Pacific
   if (nowHour < 21) return null;
@@ -523,46 +586,83 @@ function TonightCard({
     ? logs.some((l) => l.practice_date === today && l.practice_id === nighttimePractice.id)
     : false;
 
-  // Bedtime countdown (reuse logic from BedtimeCard)
-  const targetMin = getTargetMinutes(TARGET_BEDTIME);
-  const nowMinutes = nowPT.getHours() * 60 + nowPT.getMinutes();
-  const normalizeNow = nowMinutes >= 18 * 60 ? nowMinutes - 24 * 60 : nowMinutes;
-  const normalizeTarget = targetMin >= 18 * 60 ? targetMin - 24 * 60 : targetMin;
-  const minutesUntil = normalizeTarget - normalizeNow;
+  // Frame checkpoint times
+  const routineMin = getTargetMinutes(ROUTINE_WINDOW); // 22:30 = 1350
+  const bedMin = getTargetMinutes(TARGET_BEDTIME); // 00:00 = 0
+  const wakeMin = getTargetMinutes(WAKE_TARGET); // 08:30 = 510
 
-  let countdownLabel: string;
-  let countdownColor: string;
-  if (minutesUntil > 0) {
-    const h = Math.floor(minutesUntil / 60);
-    const m = minutesUntil % 60;
-    countdownLabel = h > 0 ? `${h}h ${m}m until bedtime` : `${m}m until bedtime`;
-    countdownColor = "text-green-400";
+  // Bedtime countdown
+  const normalizeNow = nowMinutes >= 18 * 60 ? nowMinutes - 24 * 60 : nowMinutes;
+  const normalizeBed = bedMin >= 18 * 60 ? bedMin - 24 * 60 : bedMin;
+  const minutesUntilBed = normalizeBed - normalizeNow;
+
+  // Determine checkpoint statuses
+  const routineOpen = nowMinutes >= routineMin || nowHour < 6; // past 10:30pm or early morning
+  const pastMidnight = nowHour < 6; // after midnight, before 6am
+
+  // Check if last night's sleep data is available for scoring
+  const longestByDay = getLongestSleepByDay(sleepData);
+  const todaySleep = longestByDay.get(today);
+  const frame = todaySleep ? scoreSleepFrame(todaySleep) : null;
+
+  // Build checkpoint sequence
+  type Checkpoint = { label: string; status: "upcoming" | "active" | "done" | "scored"; scored?: boolean };
+  const checkpoints: Checkpoint[] = [];
+
+  // Routine checkpoint
+  if (!routineOpen) {
+    checkpoints.push({ label: "routine at 10:30", status: "upcoming" });
   } else {
-    const pastMin = Math.abs(minutesUntil);
-    const h = Math.floor(pastMin / 60);
-    const m = pastMin % 60;
-    countdownLabel = h > 0 ? `+${h}h ${m}m past bedtime` : `+${m}m past bedtime`;
-    countdownColor = pastMin > 45 ? "text-red-400" : "text-amber-400";
+    checkpoints.push({ label: "routine at 10:30", status: nighttimeDone ? "done" : "active" });
   }
+
+  // Bed checkpoint
+  if (!pastMidnight) {
+    let bedLabel = "bed by midnight";
+    if (minutesUntilBed > 0) {
+      const h = Math.floor(minutesUntilBed / 60);
+      const m = minutesUntilBed % 60;
+      bedLabel = `bed by midnight (${h > 0 ? `${h}h ${m}m` : `${m}m`})`;
+    }
+    checkpoints.push({ label: bedLabel, status: "active" });
+  } else {
+    checkpoints.push({ label: "bed by midnight", status: "scored", scored: frame?.slept_on_time ?? false });
+  }
+
+  // Wake checkpoint
+  if (pastMidnight && frame) {
+    checkpoints.push({ label: "wake by 8:30", status: "scored", scored: frame.woke_on_time });
+  } else {
+    checkpoints.push({ label: "wake by 8:30", status: "upcoming" });
+  }
+
+  const borderColor = nighttimeDone ? "var(--accent)" : "rgba(251,191,36,0.3)";
 
   return (
     <div
       className="rounded-xl p-4 mb-4"
       style={{
         background: "var(--bg-card)",
-        border: `1px solid ${nighttimeDone ? "var(--accent)" : "rgba(251,191,36,0.3)"}`,
+        border: `1px solid ${borderColor}`,
       }}
     >
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Tonight</div>
-          {nighttimeDone ? (
-            <div className="text-sm font-medium text-green-400">Nighttime routine ✓</div>
-          ) : (
-            <div className="text-sm font-medium text-amber-400">Nighttime routine not started</div>
-          )}
-        </div>
-        <div className={`text-sm font-medium ${countdownColor}`}>{countdownLabel}</div>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">Tonight</div>
+      <div className="flex items-center gap-2 text-xs flex-wrap">
+        {checkpoints.map((cp, i) => (
+          <span key={i} className="flex items-center gap-1">
+            {i > 0 && <span className="text-[var(--text-muted)]">→</span>}
+            <span className={
+              cp.status === "done" ? "text-green-400" :
+              cp.status === "active" ? "text-amber-400" :
+              cp.status === "scored" ? (cp.scored ? "text-green-400" : "text-red-400") :
+              "text-[var(--text-muted)]"
+            }>
+              {cp.label}
+              {cp.status === "done" && " ✓"}
+              {cp.status === "scored" && (cp.scored ? " ✓" : " ✗")}
+            </span>
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -1233,7 +1333,7 @@ export default function Dashboard() {
       </div>
 
       {/* Tonight card — only after 9 PM */}
-      <TonightCard logs={logs} practices={practices} today={today} />
+      <TonightCard logs={logs} practices={practices} today={today} sleepData={ouraData?.sleep ?? []} />
 
       {/* Practice cards */}
       <div className="grid grid-cols-4 gap-2 md:gap-3 mb-8 md:mb-10">
@@ -1295,6 +1395,15 @@ export default function Dashboard() {
           }
           for (const r of ouraData.resilience) {
             if (r.level) resByDay.set(r.day, r.level);
+          }
+        }
+        // Sleep frame scoring by day
+        const sleepFrameByDay = new Map<string, SleepFrame>();
+        if (ouraData) {
+          const longestByDay = getLongestSleepByDay(ouraData.sleep);
+          for (const [day, entry] of longestByDay) {
+            const frame = scoreSleepFrame(entry);
+            if (frame) sleepFrameByDay.set(day, frame);
           }
         }
         // Focusmate sessions by day
@@ -1521,6 +1630,29 @@ export default function Dashboard() {
                         })}
                       </tr>
                     )}
+                    {/* Sleep frame row */}
+                    {sleepFrameByDay.size > 0 && (
+                      <tr>
+                        <td className="pr-3 py-1.5 whitespace-nowrap">
+                          <span className="text-sm md:text-base">🛏️</span>
+                        </td>
+                        {rangeDays.map((day) => {
+                          const frame = sleepFrameByDay.get(day);
+                          let dot = "🟣";
+                          if (frame?.status === "complete") dot = "🟢";
+                          else if (frame?.status === "partial") dot = "🟡";
+                          return (
+                            <td key={day} className="text-center py-1.5 px-1">
+                              <span className="text-[10px] md:text-xs" title={
+                                frame ? `bed ${frame.slept_on_time ? "✓" : "✗"} wake ${frame.woke_on_time ? "✓" : "✗"}` : "no data"
+                              }>
+                                {dot}
+                              </span>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    )}
                     {/* Focusmate row */}
                     {focusByDay.size > 0 && (
                       <tr>
@@ -1692,6 +1824,26 @@ export default function Dashboard() {
                 ? Math.round((windowEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
                 : 0;
               return <ConsistencyLine days={currDaysWithPractice} totalDays={totalDays} />;
+            })()}
+            {(() => {
+              // Sleep consistency: X/14 days with complete frame
+              const longestByDay = getLongestSleepByDay(ouraData.sleep);
+              const d14 = new Date(todayDate);
+              d14.setDate(d14.getDate() - 13);
+              let completeCount = 0;
+              for (let d = new Date(d14); d <= todayDate; d.setDate(d.getDate() + 1)) {
+                const dayStr = formatDateLocal(d);
+                const entry = longestByDay.get(dayStr);
+                if (entry) {
+                  const frame = scoreSleepFrame(entry);
+                  if (frame?.status === "complete") completeCount++;
+                }
+              }
+              return (
+                <div className="text-xs text-[var(--text-muted)] mt-1">
+                  Sleep consistency: {completeCount}/14 days with complete frame
+                </div>
+              );
             })()}
           </div>
         );
