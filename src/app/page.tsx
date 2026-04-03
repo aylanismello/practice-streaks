@@ -2157,6 +2157,8 @@ export default function Dashboard() {
   const [flowJustCompleted, setFlowJustCompleted] = useState(false);
   const [nighttimeLogs, setNighttimeLogs] = useState<{ practice_date: string; completed_at: string | null }[]>([]);
   const flowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const flowActiveRef = useRef<{ start_time: string; duration_min: number } | null>(null);
+  const flowCompletedRef = useRef(false);
 
   const togglePractice = useCallback(async (practiceId: string, isDone: boolean) => {
     if (!today || timeOffset !== 0) return;
@@ -2249,40 +2251,78 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   }, [fetchFlowData]);
 
-  // Flow countdown — uses end timestamp so it stays accurate in background tabs
-  const flowEndTimeRef = useRef<number>(0);
+  // Fetch active flow from supabase and sync local state
+  const fetchFlowActive = useCallback(async () => {
+    try {
+      const res = await fetch("/api/flow-active");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.start_time) {
+        const endMs = new Date(data.start_time).getTime() + data.duration_min * 60 * 1000;
+        const remainingMs = endMs - Date.now();
+        if (remainingMs > 0) {
+          flowActiveRef.current = data;
+          flowCompletedRef.current = false;
+          setFlowDuration(data.duration_min);
+          setFlowSecondsLeft(Math.round(remainingMs / 1000));
+          setFlowRunning(true);
+        } else {
+          // Timer already expired — clean up if we haven't already
+          flowActiveRef.current = null;
+          setFlowRunning(false);
+        }
+      } else {
+        // No active flow
+        flowActiveRef.current = null;
+        if (!flowJustCompleted) {
+          setFlowRunning(false);
+        }
+      }
+    } catch { /* ignore */ }
+  }, [flowJustCompleted]);
 
+  // Flow countdown — calculates remaining from supabase start_time
   useEffect(() => {
     if (!flowRunning) {
       if (flowIntervalRef.current) clearInterval(flowIntervalRef.current);
       return;
     }
-    // Set end time when timer starts (only if not already set)
-    if (flowEndTimeRef.current === 0) {
-      flowEndTimeRef.current = Date.now() + flowSecondsLeft * 1000;
-    }
     flowIntervalRef.current = setInterval(() => {
-      const remaining = Math.round((flowEndTimeRef.current - Date.now()) / 1000);
+      const active = flowActiveRef.current;
+      if (!active) {
+        clearInterval(flowIntervalRef.current!);
+        return;
+      }
+      const endMs = new Date(active.start_time).getTime() + active.duration_min * 60 * 1000;
+      const remaining = Math.round((endMs - Date.now()) / 1000);
       if (remaining <= 0) {
         clearInterval(flowIntervalRef.current!);
-        flowEndTimeRef.current = 0;
         setFlowSecondsLeft(0);
         setFlowRunning(false);
         setFlowJustCompleted(true);
         setFlowOpen(true);
-        playChime();
+        // Chime — may fail if AudioContext not warmed (non-local start)
+        try { playChime(); } catch { /* ignore */ }
         if (typeof document !== "undefined" && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
           new Notification("🌊 Flow Complete!", { body: "Time for a break or another round?" });
         }
-        handleFlowComplete(flowDuration).then(() => {
-          setFlowSessionWaves((t) => [...t, flowDuration]);
-        });
+        // Idempotent completion: only log if we can delete the active row
+        if (!flowCompletedRef.current) {
+          flowCompletedRef.current = true;
+          const dur = active.duration_min;
+          fetch("/api/flow-active", { method: "DELETE" }).then(() => {
+            flowActiveRef.current = null;
+            handleFlowComplete(dur).then(() => {
+              setFlowSessionWaves((t) => [...t, dur]);
+            });
+          });
+        }
       } else {
         setFlowSecondsLeft(remaining);
       }
     }, 1000);
     return () => { if (flowIntervalRef.current) clearInterval(flowIntervalRef.current); };
-  }, [flowRunning, flowDuration, handleFlowComplete]);
+  }, [flowRunning, handleFlowComplete]);
 
   // Update browser tab title with countdown when timer is running
   useEffect(() => {
@@ -2296,33 +2336,63 @@ export default function Dashboard() {
     return () => { document.title = "A.F.M's Practice"; };
   }, [flowRunning, flowSecondsLeft]);
 
-  const startFlow = useCallback(() => {
+  const startFlow = useCallback(async () => {
     // Request notification permission on first start
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission();
     }
     // Warm up AudioContext on user gesture so chime works when timer completes
     getAudioCtx();
-    flowEndTimeRef.current = Date.now() + flowDuration * 60 * 1000; setFlowSecondsLeft(flowDuration * 60);
-    setFlowRunning(true);
+    const startTime = new Date().toISOString();
+    try {
+      const res = await fetch("/api/flow-active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_time: startTime, duration_min: flowDuration }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        flowActiveRef.current = { start_time: data.start_time ?? startTime, duration_min: flowDuration };
+        flowCompletedRef.current = false;
+        setFlowSecondsLeft(flowDuration * 60);
+        setFlowRunning(true);
+      }
+    } catch { /* ignore */ }
   }, [flowDuration]);
 
-  const flowAnotherRound = useCallback(() => {
+  const flowAnotherRound = useCallback(async () => {
     setFlowJustCompleted(false);
-    flowEndTimeRef.current = Date.now() + flowDuration * 60 * 1000; setFlowSecondsLeft(flowDuration * 60);
-    setFlowRunning(true);
+    const startTime = new Date().toISOString();
+    try {
+      const res = await fetch("/api/flow-active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_time: startTime, duration_min: flowDuration }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        flowActiveRef.current = { start_time: data.start_time ?? startTime, duration_min: flowDuration };
+        flowCompletedRef.current = false;
+        setFlowSecondsLeft(flowDuration * 60);
+        setFlowRunning(true);
+      }
+    } catch { /* ignore */ }
   }, [flowDuration]);
 
   const flowDoneForNow = useCallback(() => {
     setFlowJustCompleted(false);
-    flowEndTimeRef.current = Date.now() + flowDuration * 60 * 1000; setFlowSecondsLeft(flowDuration * 60);
+    setFlowSecondsLeft(flowDuration * 60);
     setFlowOpen(false);
   }, [flowDuration]);
 
-  const stopFlow = useCallback(() => {
+  const stopFlow = useCallback(async () => {
     setFlowRunning(false);
     setFlowJustCompleted(false);
-    flowEndTimeRef.current = Date.now() + flowDuration * 60 * 1000; setFlowSecondsLeft(flowDuration * 60);
+    flowActiveRef.current = null;
+    setFlowSecondsLeft(flowDuration * 60);
+    try {
+      await fetch("/api/flow-active", { method: "DELETE" });
+    } catch { /* ignore */ }
   }, [flowDuration]);
 
   const fetchData = useCallback(async () => {
@@ -2387,7 +2457,10 @@ export default function Dashboard() {
 
     // Fetch flow data (non-blocking)
     fetchFlowData();
-  }, [fetchChinaData, fetchFlowData]);
+
+    // Fetch active flow timer (non-blocking)
+    fetchFlowActive();
+  }, [fetchChinaData, fetchFlowData, fetchFlowActive]);
 
   useEffect(() => {
     fetchData();
@@ -2395,7 +2468,7 @@ export default function Dashboard() {
     // Poll every 60s to keep iPad display fresh
     const poll = setInterval(fetchData, 60_000);
 
-    // Realtime subscription
+    // Realtime subscription for practice logs
     const channel = supabase
       .channel("practice_log_changes")
       .on(
@@ -2407,11 +2480,24 @@ export default function Dashboard() {
       )
       .subscribe();
 
+    // Realtime subscription for flow_active (cross-device sync)
+    const flowChannel = supabase
+      .channel("flow_active_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "flow_active" },
+        () => {
+          fetchFlowActive();
+        }
+      )
+      .subscribe();
+
     return () => {
       clearInterval(poll);
       supabase.removeChannel(channel);
+      supabase.removeChannel(flowChannel);
     };
-  }, [fetchData]);
+  }, [fetchData, fetchFlowActive]);
 
   if (loading) {
     return (
