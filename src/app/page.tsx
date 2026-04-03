@@ -1093,9 +1093,9 @@ function FlowTimer({
   if (running) {
     const totalSeconds = duration * 60;
     const progress = totalSeconds > 0 ? secondsLeft / totalSeconds : 0;
-    const ringSize = 320;
-    const ringSizeMobile = 260;
-    const strokeWidth = 1.5;
+    const ringSize = 380;
+    const ringSizeMobile = 300;
+    const strokeWidth = 3;
     const radius = (ringSize - strokeWidth * 2) / 2;
     const radiusMobile = (ringSizeMobile - strokeWidth * 2) / 2;
     const circumference = 2 * Math.PI * radius;
@@ -1156,13 +1156,19 @@ function FlowTimer({
           {/* Progress ring + centered timer */}
           <div className="relative flex items-center justify-center" style={{ width: ringSizeMobile, height: ringSizeMobile }}>
             <svg className="absolute inset-0 block md:hidden" width={ringSizeMobile} height={ringSizeMobile} viewBox={`0 0 ${ringSizeMobile} ${ringSizeMobile}`}>
+              <defs>
+                <filter id="flowGlow">
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                </filter>
+              </defs>
               <circle
                 cx={ringSizeMobile / 2} cy={ringSizeMobile / 2} r={radiusMobile}
-                fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth}
+                fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={strokeWidth}
               />
               <circle
                 cx={ringSizeMobile / 2} cy={ringSizeMobile / 2} r={radiusMobile}
-                fill="none" stroke="rgba(56,189,248,0.4)" strokeWidth={strokeWidth}
+                fill="none" stroke="rgba(56,189,248,0.6)" strokeWidth={strokeWidth} filter="url(#flowGlow)"
                 strokeLinecap="round"
                 strokeDasharray={circumferenceMobile}
                 strokeDashoffset={dashoffsetMobile}
@@ -1173,11 +1179,11 @@ function FlowTimer({
             <svg className="absolute inset-0 hidden md:block" width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ left: -(ringSize - ringSizeMobile) / 2, top: -(ringSize - ringSizeMobile) / 2 }}>
               <circle
                 cx={ringSize / 2} cy={ringSize / 2} r={radius}
-                fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth}
+                fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={strokeWidth}
               />
               <circle
                 cx={ringSize / 2} cy={ringSize / 2} r={radius}
-                fill="none" stroke="rgba(56,189,248,0.4)" strokeWidth={strokeWidth}
+                fill="none" stroke="rgba(56,189,248,0.6)" strokeWidth={strokeWidth} filter="url(#flowGlow)"
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={dashoffset}
