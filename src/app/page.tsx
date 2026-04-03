@@ -2529,11 +2529,15 @@ export default function Dashboard() {
       {/* Last Night card */}
       {(() => {
         const yesterday = formatDateLocal((() => { const d = new Date(today + "T12:00:00"); d.setDate(d.getDate() - 1); return d; })());
-        // Find the most recent nighttime sleep entry (bedtime_end within last 24h)
-        const now24hAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        // Find the most recent nighttime sleep entry
+        const now24hAgoMs = Date.now() - 24 * 60 * 60 * 1000;
         const lastNight = (ouraData?.sleep ?? [])
-          .filter(s => s.bedtime_start && isNighttimeSleep(s.bedtime_start) && s.bedtime_end && s.bedtime_end > now24hAgo)
-          .sort((a, b) => (b.bedtime_end ?? "").localeCompare(a.bedtime_end ?? ""))[0] ?? null;
+          .filter(s => {
+            if (!s.bedtime_start || !isNighttimeSleep(s.bedtime_start) || !s.bedtime_end) return false;
+            const endMs = new Date(s.bedtime_end).getTime();
+            return endMs > now24hAgoMs;
+          })
+          .sort((a, b) => new Date(b.bedtime_end!).getTime() - new Date(a.bedtime_end!).getTime())[0] ?? null;
         const nighttimePractice = practices.find(
           (p) => p.id === "nighttime" || p.name.toLowerCase().includes("nighttime") || p.name.toLowerCase().includes("night")
         );
