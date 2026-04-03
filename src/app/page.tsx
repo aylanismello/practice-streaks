@@ -1958,6 +1958,9 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
             <div className="text-2xl md:text-3xl font-semibold tracking-tight">
               Move <span className="text-amber-400">{currentMove}</span> of 24
             </div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5 uppercase tracking-wider">
+              Yang 24 Form
+            </div>
             <div className="text-sm text-[var(--text-muted)] mt-1">
               {fullRuns} full run{fullRuns !== 1 ? "s" : ""}
             </div>
