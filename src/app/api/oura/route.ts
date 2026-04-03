@@ -59,7 +59,10 @@ export async function GET() {
   start.setDate(start.getDate() - 90);
 
   const startDate = start.toISOString().slice(0, 10);
-  const endDate = end.toISOString().slice(0, 10);
+  // Add 1 day to end_date since Oura's API end_date is exclusive
+  const endPlusOne = new Date(end);
+  endPlusOne.setDate(endPlusOne.getDate() + 1);
+  const endDate = endPlusOne.toISOString().slice(0, 10);
   const dateRange = `start_date=${startDate}&end_date=${endDate}`;
 
   try {
