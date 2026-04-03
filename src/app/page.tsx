@@ -945,6 +945,8 @@ function playChime() {
   setTimeout(() => ctx.close(), 2000);
 }
 
+const POMO_BG_IMAGE = "https://images.unsplash.com/photo-1601575972982-e428ea86be7d?q=80&w=3087&auto=format&fit=crop";
+
 function PomoTimer({
   open,
   onClose,
@@ -958,6 +960,8 @@ function PomoTimer({
   onStart,
   onStop,
   onSecondsLeftChange,
+  onAnotherRound,
+  onDoneForNow,
 }: {
   open: boolean;
   onClose: () => void;
@@ -971,6 +975,8 @@ function PomoTimer({
   onStart: () => void;
   onStop: () => void;
   onSecondsLeftChange: (s: number) => void;
+  onAnotherRound: () => void;
+  onDoneForNow: () => void;
 }) {
   const [holdProgress, setHoldProgress] = useState(0);
   const [editingDuration, setEditingDuration] = useState(false);
@@ -995,6 +1001,16 @@ function PomoTimer({
     setHoldProgress(0);
   };
 
+  // Escape key minimizes modal
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [open, onClose]);
+
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
 
@@ -1008,43 +1024,128 @@ function PomoTimer({
 
   if (!open) return null;
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="relative w-full max-w-md mx-4 rounded-3xl p-8 flex flex-col items-center"
-        style={{
-          background: "var(--bg-card)",
-          boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
-          minHeight: "420px",
-          border: "1px solid var(--border)",
-        }}
-      >
-        {/* Close / Minimize */}
+  const bgStyle = {
+    backgroundImage: `url(${POMO_BG_IMAGE})`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+  };
+
+  // --- Completion screen ---
+  if (justCompleted) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={bgStyle}>
+        <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.65)" }} />
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-sm font-medium rounded-full px-3 py-1"
-          style={{ color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          className="absolute top-6 right-6 z-10 text-white/60 hover:text-white text-2xl font-light transition-colors"
         >
-          {running ? "Minimize" : "Close"}
+          ×
         </button>
-
-        {/* Title */}
-        <div className="text-sm font-medium tracking-wide mb-1" style={{ color: "var(--text-muted)" }}>
-          {justCompleted ? "" : running ? "Focusing..." : "🍅 Pomodoro"}
+        <div className="relative z-10 flex flex-col items-center gap-6">
+          <div className="text-6xl md:text-7xl font-light text-white" style={{ textShadow: "0 2px 20px rgba(0,0,0,0.5)" }}>
+            🍅 Done!
+          </div>
+          {sessionTomatoes.length > 0 && (
+            <div className="text-2xl tracking-wide">
+              {sessionTomatoes.map((_, i) => <span key={i}>🍅</span>)}
+            </div>
+          )}
+          <div className="text-white/70 text-sm font-medium">
+            {sessionTomatoes.length} pomo{sessionTomatoes.length !== 1 ? "s" : ""} this session
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={onAnotherRound}
+              className="rounded-full px-8 py-3 text-lg font-semibold transition-all active:scale-95"
+              style={{ background: "#f59e0b", color: "#0a0a0f" }}
+            >
+              Another round
+            </button>
+            <button
+              onClick={onDoneForNow}
+              className="rounded-full px-8 py-3 text-lg font-semibold transition-all active:scale-95"
+              style={{ background: "rgba(255,255,255,0.15)", color: "white", border: "1px solid rgba(255,255,255,0.3)" }}
+            >
+              Done for now
+            </button>
+          </div>
         </div>
+      </div>
+    );
+  }
 
-        {/* Big timer */}
-        <div
-          className="text-7xl font-light tabular-nums tracking-tight my-6"
-          style={{ color: "var(--text)", fontVariantNumeric: "tabular-nums" }}
+  // --- Running: fullscreen immersive timer ---
+  if (running) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={bgStyle}>
+        <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)" }} />
+        <style>{`@keyframes pomoBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }`}</style>
+        <button
+          onClick={onClose}
+          className="absolute top-6 right-6 z-10 text-white/60 hover:text-white text-2xl font-light transition-colors"
         >
-          {justCompleted ? (
-            <span className="text-6xl" style={{ color: "#f59e0b" }}>🍅 Done!</span>
-          ) : editingDuration && !running ? (
+          ×
+        </button>
+        <div className="relative z-10 flex flex-col items-center">
+          <div
+            className="text-8xl md:text-9xl font-extralight tabular-nums text-white"
+            style={{
+              textShadow: "0 2px 30px rgba(0,0,0,0.5)",
+              fontVariantNumeric: "tabular-nums",
+              animation: "pomoBreathe 4s ease-in-out infinite",
+            }}
+          >
+            {`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
+          </div>
+          {/* Hold to stop — subtle, at bottom */}
+          <div className="mt-16">
+            <div
+              className="relative rounded-full px-8 py-3 text-sm font-medium select-none cursor-pointer overflow-hidden"
+              style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.15)" }}
+              onMouseDown={startHold}
+              onMouseUp={endHold}
+              onMouseLeave={endHold}
+              onTouchStart={startHold}
+              onTouchEnd={endHold}
+            >
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: "rgba(255,255,255,0.2)",
+                  width: `${holdProgress}%`,
+                  transition: "width 50ms linear",
+                }}
+              />
+              <span className="relative z-10">Hold to Stop</span>
+            </div>
+          </div>
+          {sessionTomatoes.length > 0 && (
+            <div className="mt-8 text-2xl tracking-wide">
+              {sessionTomatoes.map((_, i) => <span key={i}>🍅</span>)}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // --- Pre-start screen: duration selector on immersive background ---
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={bgStyle}>
+      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.75)" }} />
+      <button
+        onClick={onClose}
+        className="absolute top-6 right-6 z-10 text-white/60 hover:text-white text-2xl font-light transition-colors"
+      >
+        ×
+      </button>
+      <div className="relative z-10 flex flex-col items-center gap-6">
+        {/* Timer display / custom input */}
+        <div
+          className="text-7xl md:text-8xl font-extralight tabular-nums text-white"
+          style={{ textShadow: "0 2px 20px rgba(0,0,0,0.5)", fontVariantNumeric: "tabular-nums" }}
+        >
+          {editingDuration ? (
             <div className="flex items-center gap-2">
               <input
                 ref={customInputRef}
@@ -1052,8 +1153,8 @@ function PomoTimer({
                 min={1}
                 max={120}
                 defaultValue={duration}
-                className="w-24 text-center text-5xl font-light rounded-xl border-2 bg-transparent outline-none"
-                style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                className="w-28 text-center text-6xl font-extralight rounded-xl border-2 bg-transparent outline-none text-white"
+                style={{ borderColor: "rgba(255,255,255,0.3)" }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     const v = Math.max(1, Math.min(120, parseInt((e.target as HTMLInputElement).value) || 20));
@@ -1070,31 +1171,31 @@ function PomoTimer({
                 }}
                 autoFocus
               />
-              <span className="text-2xl" style={{ color: "var(--text-muted)" }}>min</span>
+              <span className="text-2xl text-white/60">min</span>
             </div>
           ) : (
             <span
-              onClick={() => { if (!running) { setEditingDuration(true); } }}
-              className={!running ? "cursor-pointer hover:opacity-80" : ""}
-              title={!running ? "Tap to set custom time" : undefined}
+              onClick={() => setEditingDuration(true)}
+              className="cursor-pointer hover:opacity-80"
+              title="Tap to set custom time"
             >
               {`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
             </span>
           )}
         </div>
 
-        {/* Duration preset pills — only before starting */}
-        {!running && !justCompleted && !editingDuration && (
-          <div className="flex flex-wrap justify-center gap-2 mb-6">
+        {/* Duration pills */}
+        {!editingDuration && (
+          <div className="flex flex-wrap justify-center gap-2">
             {[15, 20, 25, 30, 45, 60].map((d) => (
               <button
                 key={d}
                 onClick={() => { onDurationChange(d); onSecondsLeftChange(d * 60); }}
                 className="rounded-full px-4 py-1.5 text-sm font-medium transition-all"
                 style={{
-                  background: duration === d ? "#f59e0b" : "var(--bg-card)",
-                  color: duration === d ? "#0a0a0f" : "var(--text-muted)",
-                  border: duration === d ? "1px solid #f59e0b" : "1px solid var(--border)",
+                  background: duration === d ? "#f59e0b" : "rgba(255,255,255,0.1)",
+                  color: duration === d ? "#0a0a0f" : "rgba(255,255,255,0.7)",
+                  border: duration === d ? "1px solid #f59e0b" : "1px solid rgba(255,255,255,0.2)",
                 }}
               >
                 {d}m
@@ -1103,54 +1204,19 @@ function PomoTimer({
           </div>
         )}
 
-        {/* Start / Hold-to-stop */}
-        {!running && !justCompleted && (
-          <button
-            onClick={onStart}
-            className="rounded-full px-10 py-3 text-lg font-semibold transition-all active:scale-95"
-            style={{ background: "#f59e0b", color: "#0a0a0f" }}
-          >
-            Start Focus
-          </button>
-        )}
+        {/* Start button */}
+        <button
+          onClick={onStart}
+          className="rounded-full px-10 py-3 text-lg font-semibold transition-all active:scale-95 mt-2"
+          style={{ background: "#f59e0b", color: "#0a0a0f" }}
+        >
+          Start Focus
+        </button>
 
-        {running && (
-          <div className="flex flex-col items-center mt-2">
-            <div
-              className="relative rounded-full px-8 py-3 text-sm font-medium select-none cursor-pointer overflow-hidden"
-              style={{ background: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
-              onMouseDown={startHold}
-              onMouseUp={endHold}
-              onMouseLeave={endHold}
-              onTouchStart={startHold}
-              onTouchEnd={endHold}
-            >
-              <div
-                className="absolute inset-0 rounded-full"
-                style={{
-                  background: "var(--border)",
-                  width: `${holdProgress}%`,
-                  transition: "width 50ms linear",
-                }}
-              />
-              <span className="relative z-10">Hold to Stop</span>
-            </div>
-          </div>
-        )}
-
-        {/* Session tomatoes */}
-        {sessionTomatoes.length > 0 && (
-          <div className="mt-6 text-2xl tracking-wide">
-            {sessionTomatoes.map((_, i) => (
-              <span key={i}>🍅</span>
-            ))}
-          </div>
-        )}
-
-        {/* Today's total at bottom of modal */}
+        {/* Today stats */}
         {todayPomos.length > 0 && (
-          <div className="mt-auto pt-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-            {todayPomos.length + sessionTomatoes.length} pomos today · {(todayPomos.reduce((a, p) => a + p.duration_min, 0) + sessionTomatoes.reduce((a, d) => a + d, 0))} min focused
+          <div className="text-white/50 text-xs font-medium mt-4">
+            {todayPomos.length} pomos today · {todayPomos.reduce((a, p) => a + p.duration_min, 0)} min focused
           </div>
         )}
       </div>
@@ -1979,7 +2045,6 @@ export default function Dashboard() {
   const [nighttimeLogs, setNighttimeLogs] = useState<{ practice_date: string; completed_at: string | null }[]>([]);
   const [pomoHistoryMode, setPomoHistoryMode] = useState(false);
   const pomoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pomoAutoStartedRef = useRef(false);
 
   const togglePractice = useCallback(async (practiceId: string, isDone: boolean) => {
     if (!today || timeOffset !== 0) return;
@@ -2084,16 +2149,15 @@ export default function Dashboard() {
           clearInterval(pomoIntervalRef.current!);
           setPomoRunning(false);
           setPomoJustCompleted(true);
+          setPomoOpen(true);
           playChime();
+          // Browser notification when tab is backgrounded
+          if (typeof document !== "undefined" && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
+            new Notification("🍅 Pomo Complete!", { body: "Time for a break or another round?" });
+          }
           handlePomoComplete(pomoDuration).then(() => {
             setPomoSessionTomatoes((t) => [...t, pomoDuration]);
           });
-          pomoAutoStartedRef.current = true;
-          setTimeout(() => {
-            setPomoJustCompleted(false);
-            setPomoSecondsLeft(pomoDuration * 60);
-            setPomoRunning(true);
-          }, 3000);
           return 0;
         }
         return prev - 1;
@@ -2103,16 +2167,30 @@ export default function Dashboard() {
   }, [pomoRunning, pomoDuration, handlePomoComplete]);
 
   const startPomo = useCallback(() => {
+    // Request notification permission on first start
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
     setPomoSecondsLeft(pomoDuration * 60);
     setPomoRunning(true);
-    pomoAutoStartedRef.current = false;
+  }, [pomoDuration]);
+
+  const pomoAnotherRound = useCallback(() => {
+    setPomoJustCompleted(false);
+    setPomoSecondsLeft(pomoDuration * 60);
+    setPomoRunning(true);
+  }, [pomoDuration]);
+
+  const pomoDoneForNow = useCallback(() => {
+    setPomoJustCompleted(false);
+    setPomoSecondsLeft(pomoDuration * 60);
+    setPomoOpen(false);
   }, [pomoDuration]);
 
   const stopPomo = useCallback(() => {
     setPomoRunning(false);
     setPomoJustCompleted(false);
     setPomoSecondsLeft(pomoDuration * 60);
-    pomoAutoStartedRef.current = false;
   }, [pomoDuration]);
 
   const fetchData = useCallback(async () => {
@@ -2234,6 +2312,8 @@ export default function Dashboard() {
         onStart={startPomo}
         onStop={stopPomo}
         onSecondsLeftChange={setPomoSecondsLeft}
+        onAnotherRound={pomoAnotherRound}
+        onDoneForNow={pomoDoneForNow}
       />
 
       {/* Header with countdown */}
