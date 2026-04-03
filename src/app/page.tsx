@@ -1397,7 +1397,7 @@ function FlowHistoryView({ flowLogs }: { flowLogs: FlowLog[] }) {
       <div className="grid grid-cols-3 gap-2 mb-6">
         {[
           { label: "Total 🌊", value: totalFlows },
-          { label: "Focus hours", value: totalHours },
+          { label: totalMinutes < 60 ? "Focus minutes" : "Focus hours", value: totalMinutes < 60 ? totalMinutes : totalHours },
           { label: "Day streak", value: streak },
         ].map((stat) => (
           <div
@@ -2452,7 +2452,10 @@ export default function Dashboard() {
       {/* Header with countdown */}
       <div className="flex items-start justify-between mb-6 md:mb-8">
         <div className="flex-1">
-          <h1 className="text-xl md:text-3xl font-semibold tracking-tight mb-0.5 md:mb-1">
+          <h1
+            className="text-xl md:text-3xl font-semibold tracking-tight mb-0.5 md:mb-1 cursor-pointer hover:opacity-70 transition-opacity"
+            onClick={() => { setChinaMode(false); setFlowHistoryMode(false); setTimeOffset(0); }}
+          >
             A.F.M&apos;s Practice
           </h1>
           <p className="text-[var(--text-muted)] text-xs md:text-base">
@@ -2526,8 +2529,11 @@ export default function Dashboard() {
       {/* Last Night card */}
       {(() => {
         const yesterday = formatDateLocal((() => { const d = new Date(today + "T12:00:00"); d.setDate(d.getDate() - 1); return d; })());
-        const longestByDay = getLongestSleepByDay(ouraData?.sleep ?? []);
-        const lastNight = longestByDay.get(today) ?? longestByDay.get(yesterday);
+        // Find the most recent nighttime sleep entry (bedtime_end within last 24h)
+        const now24hAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const lastNight = (ouraData?.sleep ?? [])
+          .filter(s => s.bedtime_start && isNighttimeSleep(s.bedtime_start) && s.bedtime_end && s.bedtime_end > now24hAgo)
+          .sort((a, b) => (b.bedtime_end ?? "").localeCompare(a.bedtime_end ?? ""))[0] ?? null;
         const nighttimePractice = practices.find(
           (p) => p.id === "nighttime" || p.name.toLowerCase().includes("nighttime") || p.name.toLowerCase().includes("night")
         );
