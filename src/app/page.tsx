@@ -2156,7 +2156,6 @@ export default function Dashboard() {
   const [flowSessionWaves, setFlowSessionWaves] = useState<number[]>([]);
   const [flowJustCompleted, setFlowJustCompleted] = useState(false);
   const [nighttimeLogs, setNighttimeLogs] = useState<{ practice_date: string; completed_at: string | null }[]>([]);
-  const [flowHistoryMode, setFlowHistoryMode] = useState(false);
   const flowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const togglePractice = useCallback(async (practiceId: string, isDone: boolean) => {
@@ -2454,148 +2453,54 @@ export default function Dashboard() {
         <div className="flex-1">
           <h1
             className="text-xl md:text-3xl font-semibold tracking-tight mb-0.5 md:mb-1 cursor-pointer hover:opacity-70 transition-opacity"
-            onClick={() => { setChinaMode(false); setFlowHistoryMode(false); setTimeOffset(0); }}
+            onClick={() => { setChinaMode(false); setTimeOffset(0); }}
           >
             A.F.M&apos;s Practice
           </h1>
           <p className="text-[var(--text-muted)] text-xs md:text-base">
             {formatDisplayDate(today)}
+            {flowRunning && !flowOpen ? (
+              <button
+                onClick={() => setFlowOpen(true)}
+                className="inline-flex items-center gap-1 text-xs md:text-sm font-semibold tabular-nums rounded-full px-2 py-0.5 ml-2 transition-all duration-200 hover:scale-105 active:scale-95"
+                style={{
+                  color: "#f59e0b",
+                  background: "rgba(245,158,11,0.1)",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                  cursor: "pointer",
+                  animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                  verticalAlign: "middle",
+                }}
+                title="Timer running — tap to open"
+              >
+                <span>🌊</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {`${String(Math.floor(flowSecondsLeft / 60)).padStart(2, "0")}:${String(flowSecondsLeft % 60).padStart(2, "0")}`}
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setFlowOpen(true)}
+                className="inline-block ml-1.5 transition-all duration-200 hover:scale-110 active:scale-95"
+                style={{ opacity: todayFlows.length > 0 ? 1 : 0.5, cursor: "pointer", background: "none", border: "none", verticalAlign: "middle", fontSize: "inherit", padding: 0 }}
+                title="Flowdoro Timer"
+              >
+                🌊
+              </button>
+            )}
           </p>
         </div>
         <div className="flex items-start gap-2">
-          {flowRunning && !flowOpen ? (
-            <button
-              onClick={() => setFlowOpen(true)}
-              className="flex items-center gap-1 text-sm md:text-base font-semibold tabular-nums rounded-full px-3 py-1 mt-1 transition-all duration-200 hover:scale-105 active:scale-95"
-              style={{
-                color: "#f59e0b",
-                background: "rgba(245,158,11,0.1)",
-                border: "1px solid rgba(245,158,11,0.3)",
-                cursor: "pointer",
-                animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-              }}
-              title="Timer running — tap to open"
-            >
-              <span>🌊</span>
-              <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                {`${String(Math.floor(flowSecondsLeft / 60)).padStart(2, "0")}:${String(flowSecondsLeft % 60).padStart(2, "0")}`}
-              </span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setFlowOpen(true)}
-              className="relative text-2xl md:text-3xl transition-all duration-200 hover:scale-110 active:scale-95 mt-1"
-              style={{ opacity: todayFlows.length > 0 ? 1 : 0.5, cursor: "pointer", background: "none", border: "none" }}
-              title="Flowdoro Timer"
-            >
-              🌊
-              {todayFlows.length > 0 && (
-                <span
-                  className="absolute -top-1 -right-2 text-[10px] font-bold tabular-nums"
-                  style={{ color: "var(--text)" }}
-                >
-                  {todayFlows.length}
-                </span>
-              )}
-            </button>
-          )}
-          <button
-            onClick={() => { setFlowHistoryMode(!flowHistoryMode); if (!flowHistoryMode) setChinaMode(false); }}
-            className="text-2xl md:text-3xl transition-all duration-200 hover:scale-110 active:scale-95 mt-1"
-            style={{
-              cursor: "pointer",
-              background: "none",
-              border: "none",
-              opacity: flowHistoryMode ? 1 : 0.5,
-              filter: flowHistoryMode ? "drop-shadow(0 0 4px rgba(245,158,11,0.4))" : "none",
-            }}
-            title="Flowdoro History"
-          >
-            📅
-          </button>
-          <TripCountdown inline onClick={() => { setChinaMode(!chinaMode); if (!chinaMode) setFlowHistoryMode(false); }} isActive={chinaMode} />
+          <TripCountdown inline onClick={() => { setChinaMode(!chinaMode); }} isActive={chinaMode} />
         </div>
       </div>
 
       {chinaMode ? (
         <ChinaPrepView entries={chinaEntries} onSave={handleChinaSave} onDelete={handleChinaDelete} />
-      ) : flowHistoryMode ? (
-        <FlowHistoryView flowLogs={flowLogs} />
       ) : (<>
 
       {/* Tonight card — only after 9 PM */}
       <TonightCard logs={logs} practices={practices} today={today} sleepData={ouraData?.sleep ?? []} />
-
-      {/* Last Night card */}
-      {(() => {
-        const yesterday = formatDateLocal((() => { const d = new Date(today + "T12:00:00"); d.setDate(d.getDate() - 1); return d; })());
-        // Find the most recent nighttime sleep entry
-        const now24hAgoMs = Date.now() - 24 * 60 * 60 * 1000;
-        const lastNight = (ouraData?.sleep ?? [])
-          .filter(s => {
-            if (!s.bedtime_start || !isNighttimeSleep(s.bedtime_start) || !s.bedtime_end) return false;
-            const endMs = new Date(s.bedtime_end).getTime();
-            return endMs > now24hAgoMs;
-          })
-          .sort((a, b) => new Date(b.bedtime_end!).getTime() - new Date(a.bedtime_end!).getTime())[0] ?? null;
-        const nighttimePractice = practices.find(
-          (p) => p.id === "nighttime" || p.name.toLowerCase().includes("nighttime") || p.name.toLowerCase().includes("night")
-        );
-        const routineDone = nighttimePractice
-          ? logs.some((l) => l.practice_date === yesterday && l.practice_id === nighttimePractice.id)
-          : false;
-
-        // Find completed_at timestamp for yesterday's nighttime routine
-        const nighttimeEntry = nighttimeLogs.find((n) => n.practice_date === yesterday);
-        const routineTimeLabel = (() => {
-          if (!routineDone) return "✗";
-          if (nighttimeEntry?.completed_at) {
-            const pt = new Date(new Date(nighttimeEntry.completed_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-            const h = pt.getHours();
-            const m = pt.getMinutes();
-            const ampm = h >= 12 ? "p" : "a";
-            const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-            return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
-          }
-          return "✓";
-        })();
-
-        const formatIsoTime = (iso: string) => {
-          const pt = new Date(new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-          const h = pt.getHours();
-          const m = pt.getMinutes();
-          const ampm = h >= 12 ? "p" : "a";
-          const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-          return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
-        };
-
-        const hasAsleep = !!lastNight?.bedtime_start;
-        const hasWake = !!lastNight?.bedtime_end;
-        const allPresent = routineDone && hasAsleep && hasWake;
-        const borderColor = allPresent ? "rgba(34,197,94,0.3)" : "rgba(251,191,36,0.3)";
-
-        return (
-          <div
-            className="rounded-xl p-3 md:p-4 mb-4 md:mb-5"
-            style={{ background: "var(--bg-card)", border: `1px solid ${borderColor}` }}
-          >
-            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5">🌙 Last Night</div>
-            <div className="flex items-center gap-2 text-sm md:text-base">
-              <span className={routineDone ? "text-green-400" : "text-amber-400"}>
-                routine {routineTimeLabel}
-              </span>
-              <span className="text-[var(--text-muted)]">→</span>
-              <span className={hasAsleep ? "text-green-400" : "text-amber-400"}>
-                asleep {hasAsleep ? formatIsoTime(lastNight!.bedtime_start!) : "–"}
-              </span>
-              <span className="text-[var(--text-muted)]">→</span>
-              <span className={hasWake ? "text-green-400" : "text-amber-400"}>
-                wake {hasWake ? formatIsoTime(lastNight!.bedtime_end!) : "–"}
-              </span>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Practice cards */}
       <div className="grid grid-cols-4 gap-2 md:gap-3 mb-8 md:mb-10">
@@ -2637,7 +2542,70 @@ export default function Dashboard() {
         })}
       </div>
 
-
+      {/* Last Night card */}
+      {(() => {
+        const yesterday = formatDateLocal((() => { const d = new Date(today + "T12:00:00"); d.setDate(d.getDate() - 1); return d; })());
+        const now24hAgoMs = Date.now() - 24 * 60 * 60 * 1000;
+        const lastNight = (ouraData?.sleep ?? [])
+          .filter(s => {
+            if (!s.bedtime_start || !isNighttimeSleep(s.bedtime_start) || !s.bedtime_end) return false;
+            const endMs = new Date(s.bedtime_end).getTime();
+            return endMs > now24hAgoMs;
+          })
+          .sort((a, b) => new Date(b.bedtime_end!).getTime() - new Date(a.bedtime_end!).getTime())[0] ?? null;
+        const nighttimePractice = practices.find(
+          (p) => p.id === "nighttime" || p.name.toLowerCase().includes("nighttime") || p.name.toLowerCase().includes("night")
+        );
+        const routineDone = nighttimePractice
+          ? logs.some((l) => l.practice_date === yesterday && l.practice_id === nighttimePractice.id)
+          : false;
+        const nighttimeEntry = nighttimeLogs.find((n) => n.practice_date === yesterday);
+        const routineTimeLabel = (() => {
+          if (!routineDone) return "✗";
+          if (nighttimeEntry?.completed_at) {
+            const pt = new Date(new Date(nighttimeEntry.completed_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+            const h = pt.getHours();
+            const m = pt.getMinutes();
+            const ampm = h >= 12 ? "p" : "a";
+            const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+            return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+          }
+          return "✓";
+        })();
+        const formatIsoTime = (iso: string) => {
+          const pt = new Date(new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+          const h = pt.getHours();
+          const m = pt.getMinutes();
+          const ampm = h >= 12 ? "p" : "a";
+          const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+          return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+        };
+        const hasAsleep = !!lastNight?.bedtime_start;
+        const hasWake = !!lastNight?.bedtime_end;
+        const allPresent = routineDone && hasAsleep && hasWake;
+        const borderColor = allPresent ? "rgba(34,197,94,0.3)" : "rgba(251,191,36,0.3)";
+        return (
+          <div
+            className="rounded-xl p-3 md:p-4 mb-4 md:mb-5"
+            style={{ background: "var(--bg-card)", border: `1px solid ${borderColor}` }}
+          >
+            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5">🌙 Last Night</div>
+            <div className="flex items-center gap-2 text-sm md:text-base">
+              <span className={routineDone ? "text-green-400" : "text-amber-400"}>
+                routine {routineTimeLabel}
+              </span>
+              <span className="text-[var(--text-muted)]">→</span>
+              <span className={hasAsleep ? "text-green-400" : "text-amber-400"}>
+                asleep {hasAsleep ? formatIsoTime(lastNight!.bedtime_start!) : "–"}
+              </span>
+              <span className="text-[var(--text-muted)]">→</span>
+              <span className={hasWake ? "text-green-400" : "text-amber-400"}>
+                wake {hasWake ? formatIsoTime(lastNight!.bedtime_end!) : "–"}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* History view with time navigation */}
       {(() => {
