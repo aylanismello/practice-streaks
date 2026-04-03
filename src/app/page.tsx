@@ -2229,31 +2229,37 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   }, [fetchFlowData]);
 
-  // Flow countdown runs at Dashboard level so it persists when modal is closed
+  // Flow countdown — uses end timestamp so it stays accurate in background tabs
+  const flowEndTimeRef = useRef<number>(0);
+
   useEffect(() => {
     if (!flowRunning) {
       if (flowIntervalRef.current) clearInterval(flowIntervalRef.current);
       return;
     }
+    // Set end time when timer starts (only if not already set)
+    if (flowEndTimeRef.current === 0) {
+      flowEndTimeRef.current = Date.now() + flowSecondsLeft * 1000;
+    }
     flowIntervalRef.current = setInterval(() => {
-      setFlowSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(flowIntervalRef.current!);
-          setFlowRunning(false);
-          setFlowJustCompleted(true);
-          setFlowOpen(true);
-          playChime();
-          // Browser notification when tab is backgrounded
-          if (typeof document !== "undefined" && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
-            new Notification("🌊 Flow Complete!", { body: "Time for a break or another round?" });
-          }
-          handleFlowComplete(flowDuration).then(() => {
-            setFlowSessionWaves((t) => [...t, flowDuration]);
-          });
-          return 0;
+      const remaining = Math.round((flowEndTimeRef.current - Date.now()) / 1000);
+      if (remaining <= 0) {
+        clearInterval(flowIntervalRef.current!);
+        flowEndTimeRef.current = 0;
+        setFlowSecondsLeft(0);
+        setFlowRunning(false);
+        setFlowJustCompleted(true);
+        setFlowOpen(true);
+        playChime();
+        if (typeof document !== "undefined" && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
+          new Notification("🌊 Flow Complete!", { body: "Time for a break or another round?" });
         }
-        return prev - 1;
-      });
+        handleFlowComplete(flowDuration).then(() => {
+          setFlowSessionWaves((t) => [...t, flowDuration]);
+        });
+      } else {
+        setFlowSecondsLeft(remaining);
+      }
     }, 1000);
     return () => { if (flowIntervalRef.current) clearInterval(flowIntervalRef.current); };
   }, [flowRunning, flowDuration, handleFlowComplete]);
@@ -2275,26 +2281,26 @@ export default function Dashboard() {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission();
     }
-    setFlowSecondsLeft(flowDuration * 60);
+    flowEndTimeRef.current = Date.now() + flowDuration * 60 * 1000; setFlowSecondsLeft(flowDuration * 60);
     setFlowRunning(true);
   }, [flowDuration]);
 
   const flowAnotherRound = useCallback(() => {
     setFlowJustCompleted(false);
-    setFlowSecondsLeft(flowDuration * 60);
+    flowEndTimeRef.current = Date.now() + flowDuration * 60 * 1000; setFlowSecondsLeft(flowDuration * 60);
     setFlowRunning(true);
   }, [flowDuration]);
 
   const flowDoneForNow = useCallback(() => {
     setFlowJustCompleted(false);
-    setFlowSecondsLeft(flowDuration * 60);
+    flowEndTimeRef.current = Date.now() + flowDuration * 60 * 1000; setFlowSecondsLeft(flowDuration * 60);
     setFlowOpen(false);
   }, [flowDuration]);
 
   const stopFlow = useCallback(() => {
     setFlowRunning(false);
     setFlowJustCompleted(false);
-    setFlowSecondsLeft(flowDuration * 60);
+    flowEndTimeRef.current = Date.now() + flowDuration * 60 * 1000; setFlowSecondsLeft(flowDuration * 60);
   }, [flowDuration]);
 
   const fetchData = useCallback(async () => {
