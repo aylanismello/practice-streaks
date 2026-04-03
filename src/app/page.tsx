@@ -919,7 +919,7 @@ function PatternsSection({
   );
 }
 
-interface PomoLog {
+interface FlowLog {
   id: string;
   date: string;
   duration_min: number;
@@ -947,15 +947,15 @@ function playChime() {
 
 const POMO_BG_IMAGE = "https://images.unsplash.com/photo-1601575972982-e428ea86be7d?q=80&w=3087&auto=format&fit=crop";
 
-function PomoTimer({
+function FlowTimer({
   open,
   onClose,
-  pomoLogs,
+  flowLogs,
   duration,
   onDurationChange,
   running,
   secondsLeft,
-  sessionTomatoes,
+  sessionWaves,
   justCompleted,
   onStart,
   onStop,
@@ -965,12 +965,12 @@ function PomoTimer({
 }: {
   open: boolean;
   onClose: () => void;
-  pomoLogs: PomoLog[];
+  flowLogs: FlowLog[];
   duration: number;
   onDurationChange: (d: number) => void;
   running: boolean;
   secondsLeft: number;
-  sessionTomatoes: number[];
+  sessionWaves: number[];
   justCompleted: boolean;
   onStart: () => void;
   onStop: () => void;
@@ -1014,7 +1014,7 @@ function PomoTimer({
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
 
-  const todayPomos = pomoLogs.filter((p) => {
+  const todayFlows = flowLogs.filter((p) => {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, "0");
@@ -1043,15 +1043,15 @@ function PomoTimer({
         </button>
         <div className="relative z-10 flex flex-col items-center gap-6">
           <div className="text-6xl md:text-7xl font-light text-white" style={{ textShadow: "0 2px 20px rgba(0,0,0,0.5)" }}>
-            🍅 Done!
+            🌊 Done!
           </div>
-          {sessionTomatoes.length > 0 && (
+          {sessionWaves.length > 0 && (
             <div className="text-2xl tracking-wide">
-              {sessionTomatoes.map((_, i) => <span key={i}>🍅</span>)}
+              {sessionWaves.map((_, i) => <span key={i}>🌊</span>)}
             </div>
           )}
           <div className="text-white/70 text-sm font-medium">
-            {sessionTomatoes.length} pomo{sessionTomatoes.length !== 1 ? "s" : ""} this session
+            {sessionWaves.length} flow{sessionWaves.length !== 1 ? "s" : ""} this session
           </div>
           <div className="flex gap-3 mt-4">
             <button
@@ -1163,9 +1163,9 @@ function PomoTimer({
               <span className="relative z-10">Hold to Stop</span>
             </div>
           </div>
-          {sessionTomatoes.length > 0 && (
+          {sessionWaves.length > 0 && (
             <div className="mt-8 text-2xl tracking-wide">
-              {sessionTomatoes.map((_, i) => <span key={i}>🍅</span>)}
+              {sessionWaves.map((_, i) => <span key={i}>🌊</span>)}
             </div>
           )}
         </div>
@@ -1258,9 +1258,9 @@ function PomoTimer({
         </button>
 
         {/* Today stats */}
-        {todayPomos.length > 0 && (
+        {todayFlows.length > 0 && (
           <div className="text-white/50 text-xs font-medium mt-4">
-            {todayPomos.length} pomos today · {todayPomos.reduce((a, p) => a + p.duration_min, 0)} min focused
+            {todayFlows.length} flows today · {todayFlows.reduce((a, p) => a + p.duration_min, 0)} min focused
           </div>
         )}
       </div>
@@ -1268,7 +1268,7 @@ function PomoTimer({
   );
 }
 
-function PomoHistoryView({ pomoLogs }: { pomoLogs: PomoLog[] }) {
+function FlowHistoryView({ flowLogs }: { flowLogs: FlowLog[] }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
@@ -1277,20 +1277,20 @@ function PomoHistoryView({ pomoLogs }: { pomoLogs: PomoLog[] }) {
   const monthLabel = viewDate.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
   const todayStr = formatDateLocal(now);
 
-  // Build lookup: date -> PomoLog[]
-  const logsByDate = new Map<string, PomoLog[]>();
-  for (const log of pomoLogs) {
+  // Build lookup: date -> FlowLog[]
+  const logsByDate = new Map<string, FlowLog[]>();
+  for (const log of flowLogs) {
     const existing = logsByDate.get(log.date) || [];
     existing.push(log);
     logsByDate.set(log.date, existing);
   }
 
   // Stats
-  const totalPomos = pomoLogs.length;
-  const totalMinutes = pomoLogs.reduce((a, p) => a + p.duration_min, 0);
+  const totalFlows = flowLogs.length;
+  const totalMinutes = flowLogs.reduce((a, p) => a + p.duration_min, 0);
   const totalHours = Math.round(totalMinutes / 60 * 10) / 10;
 
-  // Streak: consecutive days with at least 1 pomo
+  // Streak: consecutive days with at least 1 flow
   let streak = 0;
   const checkDate = new Date(now);
   if (!logsByDate.has(todayStr)) {
@@ -1327,7 +1327,7 @@ function PomoHistoryView({ pomoLogs }: { pomoLogs: PomoLog[] }) {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-2 mb-6">
         {[
-          { label: "Total 🍅", value: totalPomos },
+          { label: "Total 🌊", value: totalFlows },
           { label: "Focus hours", value: totalHours },
           { label: "Day streak", value: streak },
         ].map((stat) => (
@@ -1401,7 +1401,7 @@ function PomoHistoryView({ pomoLogs }: { pomoLogs: PomoLog[] }) {
                   </span>
                   {count > 0 && (
                     <span className="text-amber-400 font-semibold text-[11px] leading-none">
-                      {count > 1 ? `${count}🍅` : "🍅"}
+                      {count > 1 ? `${count}🌊` : "🌊"}
                     </span>
                   )}
                 </button>
@@ -1421,7 +1421,7 @@ function PomoHistoryView({ pomoLogs }: { pomoLogs: PomoLog[] }) {
             {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
           </div>
           <div className="text-sm text-[var(--text-muted)]">
-            {selectedCount} 🍅 · {selectedMinutes}m focused
+            {selectedCount} 🌊 · {selectedMinutes}m focused
           </div>
         </div>
       )}
@@ -2079,16 +2079,16 @@ export default function Dashboard() {
   const [chinaMode, setChinaMode] = useState(false);
   const [chinaEntries, setChinaEntries] = useState<ChinaPrepEntry[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [pomoOpen, setPomoOpen] = useState(false);
-  const [pomoLogs, setPomoLogs] = useState<PomoLog[]>([]);
-  const [pomoDuration, setPomoDuration] = useState(20);
-  const [pomoRunning, setPomoRunning] = useState(false);
-  const [pomoSecondsLeft, setPomoSecondsLeft] = useState(20 * 60);
-  const [pomoSessionTomatoes, setPomoSessionTomatoes] = useState<number[]>([]);
-  const [pomoJustCompleted, setPomoJustCompleted] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
+  const [flowLogs, setFlowLogs] = useState<FlowLog[]>([]);
+  const [flowDuration, setFlowDuration] = useState(20);
+  const [flowRunning, setFlowRunning] = useState(false);
+  const [flowSecondsLeft, setFlowSecondsLeft] = useState(20 * 60);
+  const [flowSessionWaves, setFlowSessionWaves] = useState<number[]>([]);
+  const [flowJustCompleted, setFlowJustCompleted] = useState(false);
   const [nighttimeLogs, setNighttimeLogs] = useState<{ practice_date: string; completed_at: string | null }[]>([]);
-  const [pomoHistoryMode, setPomoHistoryMode] = useState(false);
-  const pomoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [flowHistoryMode, setFlowHistoryMode] = useState(false);
+  const flowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const togglePractice = useCallback(async (practiceId: string, isDone: boolean) => {
     if (!today || timeOffset !== 0) return;
@@ -2158,84 +2158,84 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   }, [fetchChinaData]);
 
-  const fetchPomoData = useCallback(async () => {
+  const fetchFlowData = useCallback(async () => {
     try {
-      const res = await fetch("/api/pomo");
+      const res = await fetch("/api/flow");
       if (res.ok) {
         const data = await res.json();
-        setPomoLogs(data);
+        setFlowLogs(data);
       }
     } catch { /* ignore */ }
   }, []);
 
-  const handlePomoComplete = useCallback(async (durationMin: number) => {
+  const handleFlowComplete = useCallback(async (durationMin: number) => {
     const now = new Date();
     const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     try {
-      await fetch("/api/pomo", {
+      await fetch("/api/flow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date, duration_min: durationMin }),
       });
-      await fetchPomoData();
+      await fetchFlowData();
     } catch { /* ignore */ }
-  }, [fetchPomoData]);
+  }, [fetchFlowData]);
 
-  // Pomo countdown runs at Dashboard level so it persists when modal is closed
+  // Flow countdown runs at Dashboard level so it persists when modal is closed
   useEffect(() => {
-    if (!pomoRunning) {
-      if (pomoIntervalRef.current) clearInterval(pomoIntervalRef.current);
+    if (!flowRunning) {
+      if (flowIntervalRef.current) clearInterval(flowIntervalRef.current);
       return;
     }
-    pomoIntervalRef.current = setInterval(() => {
-      setPomoSecondsLeft((prev) => {
+    flowIntervalRef.current = setInterval(() => {
+      setFlowSecondsLeft((prev) => {
         if (prev <= 1) {
-          clearInterval(pomoIntervalRef.current!);
-          setPomoRunning(false);
-          setPomoJustCompleted(true);
-          setPomoOpen(true);
+          clearInterval(flowIntervalRef.current!);
+          setFlowRunning(false);
+          setFlowJustCompleted(true);
+          setFlowOpen(true);
           playChime();
           // Browser notification when tab is backgrounded
           if (typeof document !== "undefined" && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
-            new Notification("🍅 Pomo Complete!", { body: "Time for a break or another round?" });
+            new Notification("🌊 Flow Complete!", { body: "Time for a break or another round?" });
           }
-          handlePomoComplete(pomoDuration).then(() => {
-            setPomoSessionTomatoes((t) => [...t, pomoDuration]);
+          handleFlowComplete(flowDuration).then(() => {
+            setFlowSessionWaves((t) => [...t, flowDuration]);
           });
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-    return () => { if (pomoIntervalRef.current) clearInterval(pomoIntervalRef.current); };
-  }, [pomoRunning, pomoDuration, handlePomoComplete]);
+    return () => { if (flowIntervalRef.current) clearInterval(flowIntervalRef.current); };
+  }, [flowRunning, flowDuration, handleFlowComplete]);
 
-  const startPomo = useCallback(() => {
+  const startFlow = useCallback(() => {
     // Request notification permission on first start
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission();
     }
-    setPomoSecondsLeft(pomoDuration * 60);
-    setPomoRunning(true);
-  }, [pomoDuration]);
+    setFlowSecondsLeft(flowDuration * 60);
+    setFlowRunning(true);
+  }, [flowDuration]);
 
-  const pomoAnotherRound = useCallback(() => {
-    setPomoJustCompleted(false);
-    setPomoSecondsLeft(pomoDuration * 60);
-    setPomoRunning(true);
-  }, [pomoDuration]);
+  const flowAnotherRound = useCallback(() => {
+    setFlowJustCompleted(false);
+    setFlowSecondsLeft(flowDuration * 60);
+    setFlowRunning(true);
+  }, [flowDuration]);
 
-  const pomoDoneForNow = useCallback(() => {
-    setPomoJustCompleted(false);
-    setPomoSecondsLeft(pomoDuration * 60);
-    setPomoOpen(false);
-  }, [pomoDuration]);
+  const flowDoneForNow = useCallback(() => {
+    setFlowJustCompleted(false);
+    setFlowSecondsLeft(flowDuration * 60);
+    setFlowOpen(false);
+  }, [flowDuration]);
 
-  const stopPomo = useCallback(() => {
-    setPomoRunning(false);
-    setPomoJustCompleted(false);
-    setPomoSecondsLeft(pomoDuration * 60);
-  }, [pomoDuration]);
+  const stopFlow = useCallback(() => {
+    setFlowRunning(false);
+    setFlowJustCompleted(false);
+    setFlowSecondsLeft(flowDuration * 60);
+  }, [flowDuration]);
 
   const fetchData = useCallback(async () => {
     const effectiveDate = getEffectiveDate();
@@ -2297,9 +2297,9 @@ export default function Dashboard() {
     // Fetch China prep data (non-blocking)
     fetchChinaData();
 
-    // Fetch pomo data (non-blocking)
-    fetchPomoData();
-  }, [fetchChinaData, fetchPomoData]);
+    // Fetch flow data (non-blocking)
+    fetchFlowData();
+  }, [fetchChinaData, fetchFlowData]);
 
   useEffect(() => {
     fetchData();
@@ -2337,27 +2337,27 @@ export default function Dashboard() {
     logs.filter((l) => l.practice_date === today).map((l) => l.practice_id)
   );
 
-  const todayPomos = pomoLogs.filter((p) => p.date === today);
-  const todayPomoMinutes = todayPomos.reduce((a, p) => a + p.duration_min, 0);
+  const todayFlows = flowLogs.filter((p) => p.date === today);
+  const todayFlowMinutes = todayFlows.reduce((a, p) => a + p.duration_min, 0);
 
   return (
     <main className="max-w-[960px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-12">
-      {/* Pomo modal */}
-      <PomoTimer
-        open={pomoOpen}
-        onClose={() => setPomoOpen(false)}
-        pomoLogs={pomoLogs}
-        duration={pomoDuration}
-        onDurationChange={setPomoDuration}
-        running={pomoRunning}
-        secondsLeft={pomoSecondsLeft}
-        sessionTomatoes={pomoSessionTomatoes}
-        justCompleted={pomoJustCompleted}
-        onStart={startPomo}
-        onStop={stopPomo}
-        onSecondsLeftChange={setPomoSecondsLeft}
-        onAnotherRound={pomoAnotherRound}
-        onDoneForNow={pomoDoneForNow}
+      {/* Flow modal */}
+      <FlowTimer
+        open={flowOpen}
+        onClose={() => setFlowOpen(false)}
+        flowLogs={flowLogs}
+        duration={flowDuration}
+        onDurationChange={setFlowDuration}
+        running={flowRunning}
+        secondsLeft={flowSecondsLeft}
+        sessionWaves={flowSessionWaves}
+        justCompleted={flowJustCompleted}
+        onStart={startFlow}
+        onStop={stopFlow}
+        onSecondsLeftChange={setFlowSecondsLeft}
+        onAnotherRound={flowAnotherRound}
+        onDoneForNow={flowDoneForNow}
       />
 
       {/* Header with countdown */}
@@ -2371,9 +2371,9 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-start gap-2">
-          {pomoRunning && !pomoOpen ? (
+          {flowRunning && !flowOpen ? (
             <button
-              onClick={() => setPomoOpen(true)}
+              onClick={() => setFlowOpen(true)}
               className="flex items-center gap-1 text-sm md:text-base font-semibold tabular-nums rounded-full px-3 py-1 mt-1 transition-all duration-200 hover:scale-105 active:scale-95"
               style={{
                 color: "#f59e0b",
@@ -2384,51 +2384,51 @@ export default function Dashboard() {
               }}
               title="Timer running — tap to open"
             >
-              <span>🍅</span>
+              <span>🌊</span>
               <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                {`${String(Math.floor(pomoSecondsLeft / 60)).padStart(2, "0")}:${String(pomoSecondsLeft % 60).padStart(2, "0")}`}
+                {`${String(Math.floor(flowSecondsLeft / 60)).padStart(2, "0")}:${String(flowSecondsLeft % 60).padStart(2, "0")}`}
               </span>
             </button>
           ) : (
             <button
-              onClick={() => setPomoOpen(true)}
+              onClick={() => setFlowOpen(true)}
               className="relative text-2xl md:text-3xl transition-all duration-200 hover:scale-110 active:scale-95 mt-1"
-              style={{ opacity: todayPomos.length > 0 ? 1 : 0.5, cursor: "pointer", background: "none", border: "none" }}
-              title="Pomodoro Timer"
+              style={{ opacity: todayFlows.length > 0 ? 1 : 0.5, cursor: "pointer", background: "none", border: "none" }}
+              title="Flowdoro Timer"
             >
-              🍅
-              {todayPomos.length > 0 && (
+              🌊
+              {todayFlows.length > 0 && (
                 <span
                   className="absolute -top-1 -right-2 text-[10px] font-bold tabular-nums"
                   style={{ color: "var(--text)" }}
                 >
-                  {todayPomos.length}
+                  {todayFlows.length}
                 </span>
               )}
             </button>
           )}
           <button
-            onClick={() => { setPomoHistoryMode(!pomoHistoryMode); if (!pomoHistoryMode) setChinaMode(false); }}
+            onClick={() => { setFlowHistoryMode(!flowHistoryMode); if (!flowHistoryMode) setChinaMode(false); }}
             className="text-2xl md:text-3xl transition-all duration-200 hover:scale-110 active:scale-95 mt-1"
             style={{
               cursor: "pointer",
               background: "none",
               border: "none",
-              opacity: pomoHistoryMode ? 1 : 0.5,
-              filter: pomoHistoryMode ? "drop-shadow(0 0 4px rgba(245,158,11,0.4))" : "none",
+              opacity: flowHistoryMode ? 1 : 0.5,
+              filter: flowHistoryMode ? "drop-shadow(0 0 4px rgba(245,158,11,0.4))" : "none",
             }}
-            title="Pomodoro History"
+            title="Flowdoro History"
           >
             📅
           </button>
-          <TripCountdown inline onClick={() => { setChinaMode(!chinaMode); if (!chinaMode) setPomoHistoryMode(false); }} isActive={chinaMode} />
+          <TripCountdown inline onClick={() => { setChinaMode(!chinaMode); if (!chinaMode) setFlowHistoryMode(false); }} isActive={chinaMode} />
         </div>
       </div>
 
       {chinaMode ? (
         <ChinaPrepView entries={chinaEntries} onSave={handleChinaSave} onDelete={handleChinaDelete} />
-      ) : pomoHistoryMode ? (
-        <PomoHistoryView pomoLogs={pomoLogs} />
+      ) : flowHistoryMode ? (
+        <FlowHistoryView flowLogs={flowLogs} />
       ) : (<>
 
       {/* Tonight card — only after 9 PM */}
@@ -2538,18 +2538,18 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Today's Pomos */}
-      {todayPomos.length > 0 && (
+      {/* Today's Flows */}
+      {todayFlows.length > 0 && (
         <div
           className="rounded-xl p-3 md:p-4 mb-6 md:mb-8 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-          onClick={() => setPomoOpen(true)}
+          onClick={() => setFlowOpen(true)}
         >
           <div className="text-lg tracking-wider">
-            {todayPomos.map((_, i) => <span key={i}>🍅</span>)}
+            {todayFlows.map((_, i) => <span key={i}>🌊</span>)}
           </div>
           <div className="text-sm text-[var(--text-muted)]">
-            {todayPomos.length} 🍅 · {Math.floor(todayPomoMinutes / 60) > 0 ? `${Math.floor(todayPomoMinutes / 60)}h ` : ""}{todayPomoMinutes % 60}m focused today
+            {todayFlows.length} 🌊 · {Math.floor(todayFlowMinutes / 60) > 0 ? `${Math.floor(todayFlowMinutes / 60)}h ` : ""}{todayFlowMinutes % 60}m focused today
           </div>
         </div>
       )}
