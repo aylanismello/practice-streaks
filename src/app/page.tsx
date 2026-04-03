@@ -275,16 +275,25 @@ interface SleepFrame {
   status: FrameStatus;
 }
 
-/** Pick the longest (nighttime) sleep entry per day — filters out naps by choosing latest evening bedtime_start */
+/** Check if a bedtime_start ISO timestamp is nighttime (8pm–6am Pacific) */
+function isNighttimeSleep(bedtimeStart: string): boolean {
+  const pt = new Date(new Date(bedtimeStart).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+  const h = pt.getHours();
+  return h >= 20 || h < 6;
+}
+
+/** Pick the nighttime sleep entry per day — filters out naps by requiring bedtime_start between 8pm-6am Pacific */
 function getLongestSleepByDay(sleepData: OuraData["sleep"]): Map<string, OuraData["sleep"][number]> {
   const byDay = new Map<string, OuraData["sleep"][number]>();
   for (const s of sleepData) {
     if (!s.bedtime_start && !s.bedtime_end) continue;
+    // Filter: only consider entries where bedtime_start is nighttime (8pm-6am Pacific)
+    if (s.bedtime_start && !isNighttimeSleep(s.bedtime_start)) continue;
     const existing = byDay.get(s.day);
     if (!existing) {
       byDay.set(s.day, s);
     } else {
-      // Prefer entry with later bedtime_start (nighttime sleep, not afternoon nap)
+      // If multiple nighttime entries, prefer the one with later bedtime_start
       const existingStart = existing.bedtime_start ?? "";
       const newStart = s.bedtime_start ?? "";
       if (newStart > existingStart) byDay.set(s.day, s);
@@ -1967,6 +1976,7 @@ export default function Dashboard() {
   const [pomoSecondsLeft, setPomoSecondsLeft] = useState(20 * 60);
   const [pomoSessionTomatoes, setPomoSessionTomatoes] = useState<number[]>([]);
   const [pomoJustCompleted, setPomoJustCompleted] = useState(false);
+  const [nighttimeLogs, setNighttimeLogs] = useState<{ practice_date: string; completed_at: string | null }[]>([]);
   const [pomoHistoryMode, setPomoHistoryMode] = useState(false);
   const pomoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pomoAutoStartedRef = useRef(false);
@@ -2128,6 +2138,15 @@ export default function Dashboard() {
     if (typesRes.data) setPractices(typesRes.data);
     if (logsRes.data) setLogs(logsRes.data);
     setLoading(false);
+
+    // Fetch nighttime routine completed_at timestamps (non-blocking)
+    supabase
+      .from("practice_log")
+      .select("practice_date, completed_at")
+      .eq("practice_id", "nighttime")
+      .order("practice_date", { ascending: false })
+      .limit(7)
+      .then(({ data }) => { if (data) setNighttimeLogs(data); });
 
     // Fetch Oura data (non-blocking)
     fetch("/api/oura")
@@ -2303,6 +2322,21 @@ export default function Dashboard() {
           ? logs.some((l) => l.practice_date === yesterday && l.practice_id === nighttimePractice.id)
           : false;
 
+        // Find completed_at timestamp for yesterday's nighttime routine
+        const nighttimeEntry = nighttimeLogs.find((n) => n.practice_date === yesterday);
+        const routineTimeLabel = (() => {
+          if (!routineDone) return "✗";
+          if (nighttimeEntry?.completed_at) {
+            const pt = new Date(new Date(nighttimeEntry.completed_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+            const h = pt.getHours();
+            const m = pt.getMinutes();
+            const ampm = h >= 12 ? "p" : "a";
+            const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+            return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+          }
+          return "✓";
+        })();
+
         const formatIsoTime = (iso: string) => {
           const pt = new Date(new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
           const h = pt.getHours();
@@ -2325,7 +2359,7 @@ export default function Dashboard() {
             <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5">🌙 Last Night</div>
             <div className="flex items-center gap-2 text-sm md:text-base">
               <span className={routineDone ? "text-green-400" : "text-amber-400"}>
-                routine {routineDone ? "✓" : "✗"}
+                routine {routineTimeLabel}
               </span>
               <span className="text-[var(--text-muted)]">→</span>
               <span className={hasAsleep ? "text-green-400" : "text-amber-400"}>
@@ -2509,6 +2543,12 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
+                    {/* Section header: PRACTICES */}
+                    <tr>
+                      <td colSpan={rangeDays.length + 1} className="pt-1 pb-2">
+                        <span className="text-[9px] uppercase tracking-widest text-[var(--text-muted)] opacity-60">Practices</span>
+                      </td>
+                    </tr>
                     {practices.map((practice) => (
                       <tr key={practice.id}>
                         <td className="pr-3 py-1.5 whitespace-nowrap">
@@ -2538,6 +2578,14 @@ export default function Dashboard() {
                         })}
                       </tr>
                     ))}
+                    {/* Section header: BODY & FOCUS */}
+                    {(hrvByDay.size > 0 || sleepByDay.size > 0 || focusByDay.size > 0 || wotLogs.length > 0) && (
+                      <tr>
+                        <td colSpan={rangeDays.length + 1} className="pt-3 pb-2" style={{ borderTop: "1px solid var(--border)" }}>
+                          <span className="text-[9px] uppercase tracking-widest text-[var(--text-muted)] opacity-60">Body & Focus</span>
+                        </td>
+                      </tr>
+                    )}
                     {/* HRV row */}
                     {hrvByDay.size > 0 && (
                       <tr>
