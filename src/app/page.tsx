@@ -1057,7 +1057,7 @@ function PomoTimer({
             <button
               onClick={onAnotherRound}
               className="rounded-full px-8 py-3 text-lg font-semibold transition-all active:scale-95"
-              style={{ background: "#f59e0b", color: "#0a0a0f" }}
+              style={{ background: "#38bdf8", color: "#0a0a0f" }}
             >
               Another round
             </button>
@@ -1076,10 +1076,22 @@ function PomoTimer({
 
   // --- Running: fullscreen immersive timer ---
   if (running) {
+    const totalSeconds = duration * 60;
+    const progress = totalSeconds > 0 ? secondsLeft / totalSeconds : 0;
+    const ringSize = 280;
+    const ringSizeMobile = 220;
+    const strokeWidth = 3;
+    const bgStrokeWidth = 2;
+    const radius = (ringSize - strokeWidth * 2) / 2;
+    const radiusMobile = (ringSizeMobile - strokeWidth * 2) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const circumferenceMobile = 2 * Math.PI * radiusMobile;
+    const dashoffset = circumference * (1 - progress);
+    const dashoffsetMobile = circumferenceMobile * (1 - progress);
+
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={bgStyle}>
         <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)" }} />
-        <style>{`@keyframes pomoBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }`}</style>
         <button
           onClick={onClose}
           className="absolute top-6 right-6 z-10 text-white/60 hover:text-white text-2xl font-light transition-colors"
@@ -1087,15 +1099,47 @@ function PomoTimer({
           ×
         </button>
         <div className="relative z-10 flex flex-col items-center">
-          <div
-            className="text-8xl md:text-9xl font-extralight tabular-nums text-white"
-            style={{
-              textShadow: "0 2px 30px rgba(0,0,0,0.5)",
-              fontVariantNumeric: "tabular-nums",
-              animation: "pomoBreathe 4s ease-in-out infinite",
-            }}
-          >
-            {`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
+          {/* Progress ring + centered timer */}
+          <div className="relative flex items-center justify-center" style={{ width: ringSizeMobile, height: ringSizeMobile }}>
+            <svg className="absolute inset-0 block md:hidden" width={ringSizeMobile} height={ringSizeMobile} viewBox={`0 0 ${ringSizeMobile} ${ringSizeMobile}`}>
+              <circle
+                cx={ringSizeMobile / 2} cy={ringSizeMobile / 2} r={radiusMobile}
+                fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={bgStrokeWidth}
+              />
+              <circle
+                cx={ringSizeMobile / 2} cy={ringSizeMobile / 2} r={radiusMobile}
+                fill="none" stroke="#38bdf8" strokeWidth={strokeWidth}
+                strokeLinecap="round"
+                strokeDasharray={circumferenceMobile}
+                strokeDashoffset={dashoffsetMobile}
+                transform={`rotate(-90 ${ringSizeMobile / 2} ${ringSizeMobile / 2})`}
+                style={{ filter: "drop-shadow(0 0 8px rgba(56, 189, 248, 0.4))", transition: "stroke-dashoffset 0.5s linear" }}
+              />
+            </svg>
+            <svg className="absolute inset-0 hidden md:block" width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ left: -(ringSize - ringSizeMobile) / 2, top: -(ringSize - ringSizeMobile) / 2 }}>
+              <circle
+                cx={ringSize / 2} cy={ringSize / 2} r={radius}
+                fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={bgStrokeWidth}
+              />
+              <circle
+                cx={ringSize / 2} cy={ringSize / 2} r={radius}
+                fill="none" stroke="#38bdf8" strokeWidth={strokeWidth}
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={dashoffset}
+                transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
+                style={{ filter: "drop-shadow(0 0 8px rgba(56, 189, 248, 0.4))", transition: "stroke-dashoffset 0.5s linear" }}
+              />
+            </svg>
+            <div
+              className="relative text-8xl md:text-9xl font-extralight tabular-nums text-white"
+              style={{
+                textShadow: "0 2px 30px rgba(0,0,0,0.5)",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
+            </div>
           </div>
           {/* Hold to stop — subtle, at bottom */}
           <div className="mt-16">
@@ -1193,9 +1237,9 @@ function PomoTimer({
                 onClick={() => { onDurationChange(d); onSecondsLeftChange(d * 60); }}
                 className="rounded-full px-4 py-1.5 text-sm font-medium transition-all"
                 style={{
-                  background: duration === d ? "#f59e0b" : "rgba(255,255,255,0.1)",
+                  background: duration === d ? "#38bdf8" : "rgba(255,255,255,0.1)",
                   color: duration === d ? "#0a0a0f" : "rgba(255,255,255,0.7)",
-                  border: duration === d ? "1px solid #f59e0b" : "1px solid rgba(255,255,255,0.2)",
+                  border: duration === d ? "1px solid #38bdf8" : "1px solid rgba(255,255,255,0.2)",
                 }}
               >
                 {d}m
@@ -1208,7 +1252,7 @@ function PomoTimer({
         <button
           onClick={onStart}
           className="rounded-full px-10 py-3 text-lg font-semibold transition-all active:scale-95 mt-2"
-          style={{ background: "#f59e0b", color: "#0a0a0f" }}
+          style={{ background: "#38bdf8", color: "#0a0a0f" }}
         >
           Start Focus
         </button>
