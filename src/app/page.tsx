@@ -995,6 +995,7 @@ function FlowTimer({
 }) {
   const [holdProgress, setHoldProgress] = useState(0);
   const [editingDuration, setEditingDuration] = useState(false);
+  const [flowShowHistory, setFlowShowHistory] = useState(false);
   const customInputRef = useRef<HTMLInputElement | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -1247,11 +1248,27 @@ function FlowTimer({
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden" style={bgStyle}>
       <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.75)" }} />
       <button
+        onClick={() => setFlowShowHistory((v) => !v)}
+        className="absolute top-6 left-6 z-10 text-lg transition-all w-10 h-10 flex items-center justify-center rounded-full"
+        style={{
+          background: flowShowHistory ? "rgba(56,189,248,0.2)" : "transparent",
+          color: flowShowHistory ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)",
+        }}
+        title="Flow history"
+      >
+        📅
+      </button>
+      <button
         onClick={onClose}
         className="absolute top-6 right-6 z-10 text-white/80 hover:text-white text-4xl font-light transition-colors w-12 h-12 flex items-center justify-center"
       >
         ×
       </button>
+      {flowShowHistory ? (
+        <div className="relative z-10 w-full max-w-md px-4 overflow-y-auto max-h-[80vh]">
+          <FlowHistoryView flowLogs={flowLogs} />
+        </div>
+      ) : (
       <div className="relative z-10 flex flex-col items-center gap-6">
         {/* Timer display / custom input */}
         <div
@@ -1333,6 +1350,7 @@ function FlowTimer({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
