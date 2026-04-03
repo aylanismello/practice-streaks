@@ -2167,6 +2167,16 @@ export default function Dashboard() {
   const [chinaEntries, setChinaEntries] = useState<ChinaPrepEntry[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [flowOpen, setFlowOpen] = useState(false);
+
+  // Lock body scroll when flow modal is open
+  useEffect(() => {
+    if (flowOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [flowOpen]);
   const [flowLogs, setFlowLogs] = useState<FlowLog[]>([]);
   const [flowDuration, setFlowDuration] = useState(20);
   const [flowRunning, setFlowRunning] = useState(false);
