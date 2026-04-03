@@ -618,15 +618,15 @@ function TonightCard({
 
   // Bed checkpoint
   if (!pastMidnight) {
-    let bedLabel = "bed by midnight";
+    let bedLabel = "asleep by midnight";
     if (minutesUntilBed > 0) {
       const h = Math.floor(minutesUntilBed / 60);
       const m = minutesUntilBed % 60;
-      bedLabel = `bed by midnight (${h > 0 ? `${h}h ${m}m` : `${m}m`})`;
+      bedLabel = `asleep by midnight (${h > 0 ? `${h}h ${m}m` : `${m}m`})`;
     }
     checkpoints.push({ label: bedLabel, status: "active" });
   } else {
-    checkpoints.push({ label: "bed by midnight", status: "scored", scored: frame?.slept_on_time ?? false });
+    checkpoints.push({ label: "asleep by midnight", status: "scored", scored: frame?.slept_on_time ?? false });
   }
 
   // Wake checkpoint
