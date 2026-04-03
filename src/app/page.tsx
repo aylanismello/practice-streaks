@@ -12,8 +12,8 @@ import {
 } from "@/lib/dates";
 import type { ViewMode } from "@/lib/dates";
 
-const WIND_DOWN = "22:00"; // 10:00 PM — no screens, start winding down
-const IN_BED = "23:00"; // 11:00 PM — lights out, in bed
+const WIND_DOWN = "23:00"; // 11:00 PM — no screens
+const IN_BED = "23:30"; // 11:30 PM — in bed, lights out
 const TARGET_BEDTIME = "00:00"; // midnight — asleep by (oura measures this)
 const WAKE_TARGET = "08:30"; // 8:30 AM — wake up
 const TRACKING_START = "2026-03-21"; // First day practices were logged
@@ -614,21 +614,21 @@ function TonightCard({
   const inBedMin = getTargetMinutes(IN_BED); // 23:00 = 1380
   const pastInBed = nowMinutes >= inBedMin || nowHour < 6;
   if (!routineOpen) {
-    checkpoints.push({ label: "wind down 10pm", status: "upcoming" });
+    checkpoints.push({ label: "no screens 11pm", status: "upcoming" });
   } else {
-    checkpoints.push({ label: "wind down 10pm", status: nighttimeDone ? "done" : "active" });
+    checkpoints.push({ label: "no screens 11pm", status: nighttimeDone ? "done" : "active" });
   }
 
   // In bed checkpoint (11pm)
   if (!routineOpen) {
-    checkpoints.push({ label: "in bed 11pm", status: "upcoming" });
+    checkpoints.push({ label: "in bed 11:30pm", status: "upcoming" });
   } else if (!pastInBed) {
     const minsUntilBed11 = inBedMin - nowMinutes;
     const h = Math.floor(minsUntilBed11 / 60);
     const m = minsUntilBed11 % 60;
-    checkpoints.push({ label: `in bed 11pm (${h > 0 ? `${h}h ${m}m` : `${m}m`})`, status: "active" });
+    checkpoints.push({ label: `in bed 11:30pm (${h > 0 ? `${h}h ${m}m` : `${m}m`})`, status: "active" });
   } else {
-    checkpoints.push({ label: "in bed 11pm", status: "done" });
+    checkpoints.push({ label: "in bed 11:30pm", status: "done" });
   }
 
   // Asleep checkpoint (midnight)
