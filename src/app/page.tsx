@@ -1250,14 +1250,19 @@ interface ChinaPrepEntry {
   notes: string | null;
 }
 
-function ChinaPrepView({ entries, onSave }: { entries: ChinaPrepEntry[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean }) => void }) {
+function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean }) => void; onDelete: (date: string) => Promise<void> }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [moveInput, setMoveInput] = useState("");
   const [fullRunInput, setFullRunInput] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Single-month navigation: 0 = April, 1 = May
+  const now = new Date();
+  const defaultMonth = now.getMonth() === 4 || (now.getMonth() === 4 && now.getDate() > 21) ? 1 : now.getMonth() >= 5 ? 1 : 0;
+  const [monthIndex, setMonthIndex] = useState(defaultMonth);
 
   const tripDate = new Date("2026-05-21T00:00:00");
-  const now = new Date();
   const diffMs = tripDate.getTime() - now.getTime();
   const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   const todayStr = formatDateLocal(now);
@@ -1270,38 +1275,35 @@ function ChinaPrepView({ entries, onSave }: { entries: ChinaPrepEntry[]; onSave:
   // Entry lookup
   const entryByDate = new Map(entries.map((e) => [e.date, e]));
 
-  // Build calendar from today to May 21
-  const calendarStart = new Date(now);
-  calendarStart.setHours(0, 0, 0, 0);
-  const calendarEnd = new Date("2026-05-21T00:00:00");
-  const allDays: string[] = [];
-  for (const d = new Date(calendarStart); d <= calendarEnd; d.setDate(d.getDate() + 1)) {
-    allDays.push(formatDateLocal(d));
-  }
-
   // Buffer week: May 18-21
   const bufferDays = new Set(["2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21"]);
 
-  // Group by month for calendar rendering
-  const months: { label: string; days: (string | null)[] }[] = [];
-  let currentMonth = "";
-  for (const day of allDays) {
-    const monthKey = day.slice(0, 7);
-    if (monthKey !== currentMonth) {
-      currentMonth = monthKey;
-      const firstOfMonth = new Date(day + "T12:00:00");
-      const startDow = firstOfMonth.getDay();
-      const cells: (string | null)[] = [];
-      for (let i = 0; i < startDow; i++) cells.push(null);
-      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-      months.push({ label: `${monthNames[firstOfMonth.getMonth()]} ${firstOfMonth.getFullYear()}`, days: cells });
+  // Build the two months
+  const monthConfigs = [
+    { label: "APRIL 2026", year: 2026, month: 3 }, // JS month 3 = April
+    { label: "MAY 2026", year: 2026, month: 4 },   // JS month 4 = May
+  ];
+
+  function buildMonthDays(year: number, month: number): (string | null)[] {
+    const firstOfMonth = new Date(year, month, 1);
+    const startDow = firstOfMonth.getDay();
+    const cells: (string | null)[] = [];
+    for (let i = 0; i < startDow; i++) cells.push(null);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const lastDay = month === 4 ? 21 : daysInMonth; // May: only up to 21
+    for (let d = 1; d <= lastDay; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      cells.push(dateStr);
     }
-    months[months.length - 1].days.push(day);
+    return cells;
   }
+
+  const currentMonthConfig = monthConfigs[monthIndex];
+  const monthDays = buildMonthDays(currentMonthConfig.year, currentMonthConfig.month);
 
   function handleDayClick(day: string) {
     const existing = entryByDate.get(day);
-    setSelectedDay(day === selectedDay ? null : day);
+    setSelectedDay(day);
     if (existing) {
       setMoveInput(existing.move_learned ? String(existing.move_learned) : "");
       setFullRunInput(existing.full_run || false);
@@ -1309,6 +1311,10 @@ function ChinaPrepView({ entries, onSave }: { entries: ChinaPrepEntry[]; onSave:
       setMoveInput(currentMove < 24 ? String(currentMove + 1) : "");
       setFullRunInput(false);
     }
+  }
+
+  function closeModal() {
+    setSelectedDay(null);
   }
 
   async function handleSave() {
@@ -1322,6 +1328,14 @@ function ChinaPrepView({ entries, onSave }: { entries: ChinaPrepEntry[]; onSave:
     payload.full_run = fullRunInput;
     await onSave(payload);
     setSaving(false);
+    setSelectedDay(null);
+  }
+
+  async function handleDelete() {
+    if (!selectedDay) return;
+    setDeleting(true);
+    await onDelete(selectedDay);
+    setDeleting(false);
     setSelectedDay(null);
   }
 
@@ -1370,117 +1384,135 @@ function ChinaPrepView({ entries, onSave }: { entries: ChinaPrepEntry[]; onSave:
         ))}
       </div>
 
-      {/* Calendar */}
-      {months.map((month) => (
-        <div key={month.label} className="mb-4">
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">{month.label}</div>
-          <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-3 md:p-4">
-            {/* Day headers */}
-            <div className="grid grid-cols-7 gap-1 mb-1">
-              {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-                <div key={i} className="text-center text-[10px] text-[var(--text-muted)] pb-1">{d}</div>
-              ))}
-            </div>
-            {/* Day cells */}
-            <div className="grid grid-cols-7 gap-1">
-              {month.days.map((day, i) => {
-                if (!day) return <div key={`empty-${i}`} />;
-                const entry = entryByDate.get(day);
-                const isToday = day === todayStr;
-                const isBuffer = bufferDays.has(day);
-                const isSelected = day === selectedDay;
-                const isPast = day < todayStr;
-                const hasData = !!entry;
-
-                return (
-                  <button
-                    key={day}
-                    onClick={() => handleDayClick(day)}
-                    className="relative aspect-square rounded-lg flex flex-col items-center justify-center text-xs transition-all duration-150"
-                    style={{
-                      background: isSelected
-                        ? "rgba(245, 158, 11, 0.15)"
-                        : isBuffer
-                        ? "rgba(139, 92, 246, 0.08)"
-                        : hasData
-                        ? "rgba(245, 158, 11, 0.06)"
-                        : "transparent",
-                      border: isSelected
-                        ? "1px solid rgba(245, 158, 11, 0.5)"
-                        : isToday
-                        ? "1px solid rgba(245, 158, 11, 0.4)"
-                        : hasData
-                        ? "1px solid rgba(245, 158, 11, 0.15)"
-                        : "1px solid var(--border)",
-                      opacity: isPast && !hasData ? 0.4 : 1,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span className="text-[10px] text-[var(--text-muted)] leading-none mb-0.5">
-                      {parseInt(day.slice(8, 10), 10)}
-                    </span>
-                    {entry?.move_learned && (
-                      <span className="text-amber-400 font-semibold text-[11px] leading-none">
-                        {entry.move_learned}
-                      </span>
-                    )}
-                    {entry?.full_run && (
-                      <span className="text-[10px] leading-none">⭐</span>
-                    )}
-                    {isBuffer && day === "2026-05-18" && (
-                      <span className="absolute -top-1 left-0 text-[7px] text-purple-400 font-medium">buf</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Inline edit form for selected day */}
-          {selectedDay && month.days.includes(selectedDay) && (
-            <div
-              className="mt-2 rounded-xl p-4 animate-fade-in"
-              style={{ background: "var(--bg-card)", border: "1px solid rgba(245, 158, 11, 0.2)" }}
+      {/* Single Month Calendar */}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wider mb-2">
+          <span className="text-[var(--text-muted)]">{currentMonthConfig.label}</span>
+          {monthIndex > 0 && (
+            <button
+              onClick={() => setMonthIndex(monthIndex - 1)}
+              className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-sm px-1"
             >
-              <div className="text-sm font-medium mb-3">
-                {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                {entryByDate.has(selectedDay) && (
-                  <span className="text-[var(--text-muted)] text-xs ml-2">· editing</span>
-                )}
-              </div>
-              <div className="flex items-center gap-4 mb-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <span className="text-[var(--text-muted)]">Learn move</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={Math.min(24, currentMove + 1)}
-                    value={moveInput}
-                    onChange={(e) => setMoveInput(e.target.value)}
-                    className="w-14 rounded-lg px-2 py-1 text-center text-sm font-mono tabular-nums"
-                    style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)" }}
-                    placeholder="#"
-                  />
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <button
-                    onClick={() => setFullRunInput(!fullRunInput)}
-                    className="w-6 h-6 rounded-md flex items-center justify-center text-xs transition-colors"
-                    style={{
-                      background: fullRunInput ? "rgba(245, 158, 11, 0.2)" : "var(--bg)",
-                      border: `1px solid ${fullRunInput ? "#f59e0b" : "var(--border)"}`,
-                      color: fullRunInput ? "#f59e0b" : "var(--text-muted)",
-                    }}
-                  >
-                    {fullRunInput ? "✓" : ""}
-                  </button>
-                  <span className="text-[var(--text-muted)]">Full run</span>
-                </label>
-              </div>
+              &lsaquo;
+            </button>
+          )}
+          {monthIndex < 1 && (
+            <button
+              onClick={() => setMonthIndex(monthIndex + 1)}
+              className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-sm px-1"
+            >
+              &rsaquo;
+            </button>
+          )}
+        </div>
+        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-3 md:p-4">
+          {/* Day headers */}
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+              <div key={i} className="text-center text-[10px] text-[var(--text-muted)] pb-1">{d}</div>
+            ))}
+          </div>
+          {/* Day cells */}
+          <div className="grid grid-cols-7 gap-1">
+            {monthDays.map((day, i) => {
+              if (!day) return <div key={`empty-${i}`} />;
+              const entry = entryByDate.get(day);
+              const isToday = day === todayStr;
+              const isBuffer = bufferDays.has(day);
+              const isPast = day < todayStr;
+              const hasData = !!entry;
+
+              return (
+                <button
+                  key={day}
+                  onClick={() => handleDayClick(day)}
+                  className="relative aspect-square rounded-lg flex flex-col items-center justify-center text-xs transition-all duration-150"
+                  style={{
+                    background: isBuffer
+                      ? "rgba(139, 92, 246, 0.08)"
+                      : hasData
+                      ? "rgba(245, 158, 11, 0.06)"
+                      : "transparent",
+                    border: isToday
+                      ? "1px solid rgba(245, 158, 11, 0.4)"
+                      : hasData
+                      ? "1px solid rgba(245, 158, 11, 0.15)"
+                      : "1px solid var(--border)",
+                    opacity: isPast && !hasData ? 0.4 : 1,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span className="text-[10px] text-[var(--text-muted)] leading-none mb-0.5">
+                    {parseInt(day.slice(8, 10), 10)}
+                  </span>
+                  {entry?.move_learned && (
+                    <span className="text-amber-400 font-semibold text-[11px] leading-none">
+                      {entry.move_learned}
+                    </span>
+                  )}
+                  {entry?.full_run && (
+                    <span className="text-[10px] leading-none">⭐</span>
+                  )}
+                  {isBuffer && day === "2026-05-18" && (
+                    <span className="absolute -top-1 left-0 text-[7px] text-purple-400 font-medium">buf</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Modal overlay */}
+      {selectedDay && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0, 0, 0, 0.6)", backdropFilter: "blur(4px)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-5 animate-fade-in"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          >
+            <div className="text-base font-semibold mb-4">
+              {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+            </div>
+
+            <div className="flex flex-col gap-4 mb-5">
+              <label className="flex items-center gap-2 text-sm">
+                <span className="text-[var(--text-muted)]">Learn move</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.min(24, currentMove + 1)}
+                  value={moveInput}
+                  onChange={(e) => setMoveInput(e.target.value)}
+                  className="w-14 rounded-lg px-2 py-1 text-center text-sm font-mono tabular-nums"
+                  style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)" }}
+                  placeholder="#"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <button
+                  onClick={() => setFullRunInput(!fullRunInput)}
+                  className="w-6 h-6 rounded-md flex items-center justify-center text-xs transition-colors"
+                  style={{
+                    background: fullRunInput ? "rgba(245, 158, 11, 0.2)" : "var(--bg)",
+                    border: `1px solid ${fullRunInput ? "#f59e0b" : "var(--border)"}`,
+                    color: fullRunInput ? "#f59e0b" : "var(--text-muted)",
+                  }}
+                >
+                  {fullRunInput ? "\u2713" : ""}
+                </button>
+                <span className="text-[var(--text-muted)]">Full run</span>
+              </label>
+            </div>
+
+            <div className="flex gap-2 mb-3">
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 style={{
                   background: saving ? "var(--border)" : "#f59e0b",
                   color: saving ? "var(--text-muted)" : "#000",
@@ -1489,10 +1521,27 @@ function ChinaPrepView({ entries, onSave }: { entries: ChinaPrepEntry[]; onSave:
               >
                 {saving ? "Saving..." : "Save"}
               </button>
+              <button
+                onClick={closeModal}
+                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-muted)", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
             </div>
-          )}
+
+            {entryByDate.has(selectedDay) && (
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+              >
+                {deleting ? "Deleting..." : "Delete entry"}
+              </button>
+            )}
+          </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -1527,6 +1576,19 @@ export default function Dashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(entry),
+      });
+      if (res.ok) {
+        await fetchChinaData();
+      }
+    } catch { /* ignore */ }
+  }, [fetchChinaData]);
+
+  const handleChinaDelete = useCallback(async (date: string) => {
+    try {
+      const res = await fetch("/api/china", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date }),
       });
       if (res.ok) {
         await fetchChinaData();
@@ -1638,7 +1700,7 @@ export default function Dashboard() {
       </div>
 
       {chinaMode ? (
-        <ChinaPrepView entries={chinaEntries} onSave={handleChinaSave} />
+        <ChinaPrepView entries={chinaEntries} onSave={handleChinaSave} onDelete={handleChinaDelete} />
       ) : (<>
 
       {/* Tonight card — only after 9 PM */}

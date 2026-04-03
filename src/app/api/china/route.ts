@@ -53,3 +53,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { date } = await req.json();
+
+    if (!date) {
+      return NextResponse.json(
+        { error: "date is required" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createServiceClient();
+
+    const { error } = await supabase
+      .from("china_prep")
+      .delete()
+      .eq("date", date);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+}
