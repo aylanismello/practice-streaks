@@ -2258,6 +2258,18 @@ export default function Dashboard() {
     return () => { if (flowIntervalRef.current) clearInterval(flowIntervalRef.current); };
   }, [flowRunning, flowDuration, handleFlowComplete]);
 
+  // Update browser tab title with countdown when timer is running
+  useEffect(() => {
+    if (flowRunning) {
+      const m = Math.floor(flowSecondsLeft / 60);
+      const s = flowSecondsLeft % 60;
+      document.title = `🌊 ${m}:${s.toString().padStart(2, "0")} — A.F.M's Practice`;
+    } else {
+      document.title = "A.F.M's Practice";
+    }
+    return () => { document.title = "A.F.M's Practice"; };
+  }, [flowRunning, flowSecondsLeft]);
+
   const startFlow = useCallback(() => {
     // Request notification permission on first start
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
