@@ -953,6 +953,8 @@ function PomoTimer({
   const [sessionTomatoes, setSessionTomatoes] = useState<number[]>([]);
   const [justCompleted, setJustCompleted] = useState(false);
   const [holdProgress, setHoldProgress] = useState(0);
+  const [editingDuration, setEditingDuration] = useState(false);
+  const customInputRef = useRef<HTMLInputElement | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStartedRef = useRef(false);
@@ -1041,51 +1043,87 @@ function PomoTimer({
       <div
         className="relative w-full max-w-md mx-4 rounded-3xl p-8 flex flex-col items-center"
         style={{
-          background: "linear-gradient(135deg, #fef3c7 0%, #fed7aa 40%, #fdba74 100%)",
-          boxShadow: "0 25px 60px rgba(0,0,0,0.4)",
+          background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
           minHeight: "420px",
+          border: "1px solid rgba(245,158,11,0.15)",
         }}
       >
         {/* Close / Done for now */}
         <button
           onClick={() => { if (running) stopTimer(); onClose(); }}
           className="absolute top-4 right-4 text-sm font-medium rounded-full px-3 py-1"
-          style={{ color: "#92400e", background: "rgba(146,64,14,0.1)" }}
+          style={{ color: "#f59e0b", background: "rgba(245,158,11,0.1)" }}
         >
           {running ? "Done for now" : "Close"}
         </button>
 
         {/* Title */}
-        <div className="text-sm font-medium tracking-wide mb-1" style={{ color: "#92400e" }}>
-          {justCompleted ? "" : running ? "Focusing..." : "Pomodoro"}
+        <div className="text-sm font-medium tracking-wide mb-1" style={{ color: "#f59e0b" }}>
+          {justCompleted ? "" : running ? "Focusing..." : "🍅 Pomodoro"}
         </div>
 
         {/* Big timer */}
         <div
           className="text-7xl font-light tabular-nums tracking-tight my-6"
-          style={{ color: justCompleted ? "#b45309" : "#78716c", fontVariantNumeric: "tabular-nums" }}
+          style={{ color: justCompleted ? "#f59e0b" : "#f59e0b", fontVariantNumeric: "tabular-nums" }}
         >
           {justCompleted ? (
             <span className="text-6xl">🍅 Done!</span>
+          ) : editingDuration && !running ? (
+            <div className="flex items-center gap-2">
+              <input
+                ref={customInputRef}
+                type="number"
+                min={1}
+                max={120}
+                defaultValue={duration}
+                className="w-24 text-center text-5xl font-light rounded-xl border-2 bg-transparent outline-none"
+                style={{ borderColor: "#f59e0b", color: "#f59e0b" }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const v = Math.max(1, Math.min(120, parseInt((e.target as HTMLInputElement).value) || 20));
+                    setDuration(v);
+                    setSecondsLeft(v * 60);
+                    setEditingDuration(false);
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = Math.max(1, Math.min(120, parseInt(e.target.value) || 20));
+                  setDuration(v);
+                  setSecondsLeft(v * 60);
+                  setEditingDuration(false);
+                }}
+                autoFocus
+              />
+              <span className="text-2xl" style={{ color: "rgba(245,158,11,0.5)" }}>min</span>
+            </div>
           ) : (
-            `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+            <span
+              onClick={() => { if (!running) { setEditingDuration(true); } }}
+              className={!running ? "cursor-pointer hover:opacity-80" : ""}
+              title={!running ? "Tap to set custom time" : undefined}
+            >
+              {`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
+            </span>
           )}
         </div>
 
-        {/* Duration selector — only before starting */}
-        {!running && !justCompleted && (
-          <div className="flex gap-2 mb-6">
-            {[20, 25].map((d) => (
+        {/* Duration preset pills — only before starting */}
+        {!running && !justCompleted && !editingDuration && (
+          <div className="flex flex-wrap justify-center gap-2 mb-6">
+            {[15, 20, 25, 30, 45, 60].map((d) => (
               <button
                 key={d}
                 onClick={() => { setDuration(d); setSecondsLeft(d * 60); }}
-                className="rounded-full px-5 py-2 text-sm font-medium transition-all"
+                className="rounded-full px-4 py-1.5 text-sm font-medium transition-all"
                 style={{
-                  background: duration === d ? "#b45309" : "rgba(146,64,14,0.1)",
-                  color: duration === d ? "#fef3c7" : "#92400e",
+                  background: duration === d ? "#f59e0b" : "rgba(245,158,11,0.08)",
+                  color: duration === d ? "#1a1a2e" : "#f59e0b",
+                  border: duration === d ? "1px solid #f59e0b" : "1px solid rgba(245,158,11,0.25)",
                 }}
               >
-                {d} min
+                {d}m
               </button>
             ))}
           </div>
@@ -1096,7 +1134,7 @@ function PomoTimer({
           <button
             onClick={startTimer}
             className="rounded-full px-10 py-3 text-lg font-semibold transition-all active:scale-95"
-            style={{ background: "#b45309", color: "#fef3c7" }}
+            style={{ background: "#f59e0b", color: "#1a1a2e" }}
           >
             Start Focus
           </button>
@@ -1106,7 +1144,7 @@ function PomoTimer({
           <div className="flex flex-col items-center mt-2">
             <div
               className="relative rounded-full px-8 py-3 text-sm font-medium select-none cursor-pointer overflow-hidden"
-              style={{ background: "rgba(146,64,14,0.1)", color: "#92400e" }}
+              style={{ background: "rgba(245,158,11,0.1)", color: "#f59e0b" }}
               onMouseDown={startHold}
               onMouseUp={endHold}
               onMouseLeave={endHold}
@@ -1116,7 +1154,7 @@ function PomoTimer({
               <div
                 className="absolute inset-0 rounded-full"
                 style={{
-                  background: "rgba(180,67,9,0.25)",
+                  background: "rgba(245,158,11,0.25)",
                   width: `${holdProgress}%`,
                   transition: "width 50ms linear",
                 }}
@@ -1137,7 +1175,7 @@ function PomoTimer({
 
         {/* Today's total at bottom of modal */}
         {todayPomos.length > 0 && (
-          <div className="mt-auto pt-4 text-xs font-medium" style={{ color: "#92400e" }}>
+          <div className="mt-auto pt-4 text-xs font-medium" style={{ color: "rgba(245,158,11,0.7)" }}>
             {todayPomos.length + sessionTomatoes.length} pomos today · {(todayPomos.reduce((a, p) => a + p.duration_min, 0) + sessionTomatoes.reduce((a, d) => a + d, 0))} min focused
           </div>
         )}
