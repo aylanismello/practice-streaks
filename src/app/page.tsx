@@ -910,7 +910,7 @@ function PatternsSection({
   );
 }
 
-function TripCountdown({ inline }: { inline?: boolean }) {
+function TripCountdown({ inline, onClick, isActive }: { inline?: boolean; onClick?: () => void; isActive?: boolean }) {
   const tripDate = new Date("2026-05-21T00:00:00");
   const now = new Date();
   const diffMs = tripDate.getTime() - now.getTime();
@@ -921,17 +921,25 @@ function TripCountdown({ inline }: { inline?: boolean }) {
   if (inline) {
     // Compact version for top-right on desktop
     return (
-      <div className="text-right">
-        <div className="text-[var(--text-muted)] text-[10px] uppercase tracking-[0.15em] mb-1">
+      <button
+        onClick={onClick}
+        className="text-right rounded-xl px-3 py-2 -mr-3 -mt-2 transition-all duration-200"
+        style={{
+          background: isActive ? "rgba(245, 158, 11, 0.1)" : "transparent",
+          border: isActive ? "1px solid rgba(245, 158, 11, 0.3)" : "1px solid transparent",
+          cursor: "pointer",
+        }}
+      >
+        <div className="text-[10px] uppercase tracking-[0.15em] mb-1" style={{ color: isActive ? "#f59e0b" : "var(--text-muted)" }}>
           folie à trois 🇨🇳
         </div>
-        <div className="text-3xl font-light tabular-nums tracking-tight text-[var(--text)]">
+        <div className="text-3xl font-light tabular-nums tracking-tight" style={{ color: isActive ? "#f59e0b" : "var(--text)" }}>
           {daysRemaining}
         </div>
-        <div className="text-[10px] text-[var(--text-muted)]">
+        <div className="text-[10px]" style={{ color: isActive ? "rgba(245, 158, 11, 0.7)" : "var(--text-muted)" }}>
           days · May 21
         </div>
-      </div>
+      </button>
     );
   }
 
@@ -1235,6 +1243,260 @@ function YourYear({ months, ouraData }: { months: HistoryMonth[]; ouraData: Oura
   );
 }
 
+interface ChinaPrepEntry {
+  date: string;
+  move_learned: number | null;
+  full_run: boolean;
+  notes: string | null;
+}
+
+function ChinaPrepView({ entries, onSave }: { entries: ChinaPrepEntry[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean }) => void }) {
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [moveInput, setMoveInput] = useState("");
+  const [fullRunInput, setFullRunInput] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const tripDate = new Date("2026-05-21T00:00:00");
+  const now = new Date();
+  const diffMs = tripDate.getTime() - now.getTime();
+  const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const todayStr = formatDateLocal(now);
+
+  // Compute stats
+  const currentMove = entries.reduce((max, e) => e.move_learned && e.move_learned > max ? e.move_learned : max, 0);
+  const fullRuns = entries.filter((e) => e.full_run).length;
+  const practiceDays = entries.length;
+
+  // Entry lookup
+  const entryByDate = new Map(entries.map((e) => [e.date, e]));
+
+  // Build calendar from today to May 21
+  const calendarStart = new Date(now);
+  calendarStart.setHours(0, 0, 0, 0);
+  const calendarEnd = new Date("2026-05-21T00:00:00");
+  const allDays: string[] = [];
+  for (const d = new Date(calendarStart); d <= calendarEnd; d.setDate(d.getDate() + 1)) {
+    allDays.push(formatDateLocal(d));
+  }
+
+  // Buffer week: May 18-21
+  const bufferDays = new Set(["2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21"]);
+
+  // Group by month for calendar rendering
+  const months: { label: string; days: (string | null)[] }[] = [];
+  let currentMonth = "";
+  for (const day of allDays) {
+    const monthKey = day.slice(0, 7);
+    if (monthKey !== currentMonth) {
+      currentMonth = monthKey;
+      const firstOfMonth = new Date(day + "T12:00:00");
+      const startDow = firstOfMonth.getDay();
+      const cells: (string | null)[] = [];
+      for (let i = 0; i < startDow; i++) cells.push(null);
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      months.push({ label: `${monthNames[firstOfMonth.getMonth()]} ${firstOfMonth.getFullYear()}`, days: cells });
+    }
+    months[months.length - 1].days.push(day);
+  }
+
+  function handleDayClick(day: string) {
+    const existing = entryByDate.get(day);
+    setSelectedDay(day === selectedDay ? null : day);
+    if (existing) {
+      setMoveInput(existing.move_learned ? String(existing.move_learned) : "");
+      setFullRunInput(existing.full_run || false);
+    } else {
+      setMoveInput(currentMove < 24 ? String(currentMove + 1) : "");
+      setFullRunInput(false);
+    }
+  }
+
+  async function handleSave() {
+    if (!selectedDay) return;
+    setSaving(true);
+    const payload: { date: string; move_learned?: number; full_run?: boolean } = { date: selectedDay };
+    const mv = parseInt(moveInput, 10);
+    if (!isNaN(mv) && mv > 0 && mv <= 24 && mv <= currentMove + 1) {
+      payload.move_learned = mv;
+    }
+    payload.full_run = fullRunInput;
+    await onSave(payload);
+    setSaving(false);
+    setSelectedDay(null);
+  }
+
+  return (
+    <div className="animate-fade-in">
+      {/* Progress Header */}
+      <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-5 md:p-6 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-2xl md:text-3xl font-semibold tracking-tight">
+              Move <span className="text-amber-400">{currentMove}</span> of 24
+            </div>
+            <div className="text-sm text-[var(--text-muted)] mt-1">
+              {fullRuns} full run{fullRuns !== 1 ? "s" : ""}
+            </div>
+          </div>
+        </div>
+        {/* Progress bar */}
+        <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${(currentMove / 24) * 100}%`, background: "#f59e0b" }}
+          />
+        </div>
+        <div className="text-[10px] text-[var(--text-muted)] mt-1.5 text-right">
+          {currentMove}/24 moves
+        </div>
+      </div>
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-4 gap-2 mb-6">
+        {[
+          { label: "Days left", value: daysRemaining },
+          { label: "Days practiced", value: practiceDays },
+          { label: "Current move", value: `${currentMove}/24` },
+          { label: "Full runs", value: fullRuns },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-xl p-3 text-center"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          >
+            <div className="text-lg md:text-xl font-semibold tabular-nums">{stat.value}</div>
+            <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar */}
+      {months.map((month) => (
+        <div key={month.label} className="mb-4">
+          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">{month.label}</div>
+          <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-3 md:p-4">
+            {/* Day headers */}
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                <div key={i} className="text-center text-[10px] text-[var(--text-muted)] pb-1">{d}</div>
+              ))}
+            </div>
+            {/* Day cells */}
+            <div className="grid grid-cols-7 gap-1">
+              {month.days.map((day, i) => {
+                if (!day) return <div key={`empty-${i}`} />;
+                const entry = entryByDate.get(day);
+                const isToday = day === todayStr;
+                const isBuffer = bufferDays.has(day);
+                const isSelected = day === selectedDay;
+                const isPast = day < todayStr;
+                const hasData = !!entry;
+
+                return (
+                  <button
+                    key={day}
+                    onClick={() => handleDayClick(day)}
+                    className="relative aspect-square rounded-lg flex flex-col items-center justify-center text-xs transition-all duration-150"
+                    style={{
+                      background: isSelected
+                        ? "rgba(245, 158, 11, 0.15)"
+                        : isBuffer
+                        ? "rgba(139, 92, 246, 0.08)"
+                        : hasData
+                        ? "rgba(245, 158, 11, 0.06)"
+                        : "transparent",
+                      border: isSelected
+                        ? "1px solid rgba(245, 158, 11, 0.5)"
+                        : isToday
+                        ? "1px solid rgba(245, 158, 11, 0.4)"
+                        : hasData
+                        ? "1px solid rgba(245, 158, 11, 0.15)"
+                        : "1px solid var(--border)",
+                      opacity: isPast && !hasData ? 0.4 : 1,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span className="text-[10px] text-[var(--text-muted)] leading-none mb-0.5">
+                      {parseInt(day.slice(8, 10), 10)}
+                    </span>
+                    {entry?.move_learned && (
+                      <span className="text-amber-400 font-semibold text-[11px] leading-none">
+                        {entry.move_learned}
+                      </span>
+                    )}
+                    {entry?.full_run && (
+                      <span className="text-[10px] leading-none">⭐</span>
+                    )}
+                    {isBuffer && day === "2026-05-18" && (
+                      <span className="absolute -top-1 left-0 text-[7px] text-purple-400 font-medium">buf</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Inline edit form for selected day */}
+          {selectedDay && month.days.includes(selectedDay) && (
+            <div
+              className="mt-2 rounded-xl p-4 animate-fade-in"
+              style={{ background: "var(--bg-card)", border: "1px solid rgba(245, 158, 11, 0.2)" }}
+            >
+              <div className="text-sm font-medium mb-3">
+                {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                {entryByDate.has(selectedDay) && (
+                  <span className="text-[var(--text-muted)] text-xs ml-2">· editing</span>
+                )}
+              </div>
+              <div className="flex items-center gap-4 mb-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <span className="text-[var(--text-muted)]">Learn move</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={Math.min(24, currentMove + 1)}
+                    value={moveInput}
+                    onChange={(e) => setMoveInput(e.target.value)}
+                    className="w-14 rounded-lg px-2 py-1 text-center text-sm font-mono tabular-nums"
+                    style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)" }}
+                    placeholder="#"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <button
+                    onClick={() => setFullRunInput(!fullRunInput)}
+                    className="w-6 h-6 rounded-md flex items-center justify-center text-xs transition-colors"
+                    style={{
+                      background: fullRunInput ? "rgba(245, 158, 11, 0.2)" : "var(--bg)",
+                      border: `1px solid ${fullRunInput ? "#f59e0b" : "var(--border)"}`,
+                      color: fullRunInput ? "#f59e0b" : "var(--text-muted)",
+                    }}
+                  >
+                    {fullRunInput ? "✓" : ""}
+                  </button>
+                  <span className="text-[var(--text-muted)]">Full run</span>
+                </label>
+              </div>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                style={{
+                  background: saving ? "var(--border)" : "#f59e0b",
+                  color: saving ? "var(--text-muted)" : "#000",
+                  cursor: saving ? "default" : "pointer",
+                }}
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [practices, setPractices] = useState<PracticeType[]>([]);
   const [logs, setLogs] = useState<PracticeLog[]>([]);
@@ -1246,6 +1508,31 @@ export default function Dashboard() {
   const [wotLogs, setWotLogs] = useState<WotEntry[]>([]);
   const [historyMonths, setHistoryMonths] = useState<HistoryMonth[] | null>(null);
   const [focusmateData, setFocusmateData] = useState<FocusmateData | null>(null);
+  const [chinaMode, setChinaMode] = useState(false);
+  const [chinaEntries, setChinaEntries] = useState<ChinaPrepEntry[]>([]);
+
+  const fetchChinaData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/china");
+      if (res.ok) {
+        const data = await res.json();
+        setChinaEntries(data);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleChinaSave = useCallback(async (entry: { date: string; move_learned?: number; full_run?: boolean }) => {
+    try {
+      const res = await fetch("/api/china", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry),
+      });
+      if (res.ok) {
+        await fetchChinaData();
+      }
+    } catch { /* ignore */ }
+  }, [fetchChinaData]);
 
   const fetchData = useCallback(async () => {
     const effectiveDate = getEffectiveDate();
@@ -1294,7 +1581,10 @@ export default function Dashboard() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data && !data.error) setFocusmateData(data); })
       .catch(() => {});
-  }, []);
+
+    // Fetch China prep data (non-blocking)
+    fetchChinaData();
+  }, [fetchChinaData]);
 
   useEffect(() => {
     fetchData();
@@ -1344,8 +1634,12 @@ export default function Dashboard() {
             {formatDisplayDate(today)}
           </p>
         </div>
-        <TripCountdown inline />
+        <TripCountdown inline onClick={() => setChinaMode(!chinaMode)} isActive={chinaMode} />
       </div>
+
+      {chinaMode ? (
+        <ChinaPrepView entries={chinaEntries} onSave={handleChinaSave} />
+      ) : (<>
 
       {/* Tonight card — only after 9 PM */}
       <TonightCard logs={logs} practices={practices} today={today} sleepData={ouraData?.sleep ?? []} />
@@ -1872,6 +2166,7 @@ export default function Dashboard() {
 
       {historyMonths && <YourYear months={historyMonths} ouraData={ouraData} />}
 
+      </>)}
     </main>
   );
 }
