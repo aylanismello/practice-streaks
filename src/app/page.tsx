@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   getEffectiveDate,
@@ -910,6 +910,242 @@ function PatternsSection({
   );
 }
 
+interface PomoLog {
+  id: string;
+  date: string;
+  duration_min: number;
+  completed_at: string;
+}
+
+function playChime() {
+  const ctx = new AudioContext();
+  const now = ctx.currentTime;
+  // Gentle two-tone chime
+  [523.25, 659.25, 783.99].forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, now + i * 0.15);
+    gain.gain.linearRampToValueAtTime(0.15, now + i * 0.15 + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.8);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now + i * 0.15);
+    osc.stop(now + i * 0.15 + 0.8);
+  });
+  setTimeout(() => ctx.close(), 2000);
+}
+
+function PomoTimer({
+  open,
+  onClose,
+  pomoLogs,
+  onPomoComplete,
+}: {
+  open: boolean;
+  onClose: () => void;
+  pomoLogs: PomoLog[];
+  onPomoComplete: (durationMin: number) => Promise<void>;
+}) {
+  const [duration, setDuration] = useState(20);
+  const [running, setRunning] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(20 * 60);
+  const [sessionTomatoes, setSessionTomatoes] = useState<number[]>([]);
+  const [justCompleted, setJustCompleted] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoStartedRef = useRef(false);
+
+  // Countdown logic
+  useEffect(() => {
+    if (!running) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      return;
+    }
+    intervalRef.current = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          // Timer complete
+          clearInterval(intervalRef.current!);
+          setRunning(false);
+          setJustCompleted(true);
+          playChime();
+          onPomoComplete(duration).then(() => {
+            setSessionTomatoes((t) => [...t, duration]);
+          });
+          // Auto-reset and start after 3 seconds
+          autoStartedRef.current = true;
+          setTimeout(() => {
+            setJustCompleted(false);
+            setSecondsLeft(duration * 60);
+            setRunning(true);
+          }, 3000);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [running, duration, onPomoComplete]);
+
+  const startTimer = () => {
+    setSecondsLeft(duration * 60);
+    setRunning(true);
+    autoStartedRef.current = false;
+  };
+
+  const stopTimer = () => {
+    setRunning(false);
+    setJustCompleted(false);
+    setSecondsLeft(duration * 60);
+    autoStartedRef.current = false;
+  };
+
+  const startHold = () => {
+    setHoldProgress(0);
+    let p = 0;
+    holdTimerRef.current = setInterval(() => {
+      p += 5;
+      setHoldProgress(p);
+      if (p >= 100) {
+        if (holdTimerRef.current) clearInterval(holdTimerRef.current);
+        stopTimer();
+      }
+    }, 50);
+  };
+
+  const endHold = () => {
+    if (holdTimerRef.current) clearInterval(holdTimerRef.current);
+    setHoldProgress(0);
+  };
+
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = secondsLeft % 60;
+
+  const todayPomos = pomoLogs.filter((p) => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return p.date === `${y}-${m}-${d}`;
+  });
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+    >
+      <div
+        className="relative w-full max-w-md mx-4 rounded-3xl p-8 flex flex-col items-center"
+        style={{
+          background: "linear-gradient(135deg, #fef3c7 0%, #fed7aa 40%, #fdba74 100%)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.4)",
+          minHeight: "420px",
+        }}
+      >
+        {/* Close / Done for now */}
+        <button
+          onClick={() => { if (running) stopTimer(); onClose(); }}
+          className="absolute top-4 right-4 text-sm font-medium rounded-full px-3 py-1"
+          style={{ color: "#92400e", background: "rgba(146,64,14,0.1)" }}
+        >
+          {running ? "Done for now" : "Close"}
+        </button>
+
+        {/* Title */}
+        <div className="text-sm font-medium tracking-wide mb-1" style={{ color: "#92400e" }}>
+          {justCompleted ? "" : running ? "Focusing..." : "Pomodoro"}
+        </div>
+
+        {/* Big timer */}
+        <div
+          className="text-7xl font-light tabular-nums tracking-tight my-6"
+          style={{ color: justCompleted ? "#b45309" : "#78716c", fontVariantNumeric: "tabular-nums" }}
+        >
+          {justCompleted ? (
+            <span className="text-6xl">🍅 Done!</span>
+          ) : (
+            `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+          )}
+        </div>
+
+        {/* Duration selector — only before starting */}
+        {!running && !justCompleted && (
+          <div className="flex gap-2 mb-6">
+            {[20, 25].map((d) => (
+              <button
+                key={d}
+                onClick={() => { setDuration(d); setSecondsLeft(d * 60); }}
+                className="rounded-full px-5 py-2 text-sm font-medium transition-all"
+                style={{
+                  background: duration === d ? "#b45309" : "rgba(146,64,14,0.1)",
+                  color: duration === d ? "#fef3c7" : "#92400e",
+                }}
+              >
+                {d} min
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Start / Hold-to-stop */}
+        {!running && !justCompleted && (
+          <button
+            onClick={startTimer}
+            className="rounded-full px-10 py-3 text-lg font-semibold transition-all active:scale-95"
+            style={{ background: "#b45309", color: "#fef3c7" }}
+          >
+            Start Focus
+          </button>
+        )}
+
+        {running && (
+          <div className="flex flex-col items-center mt-2">
+            <div
+              className="relative rounded-full px-8 py-3 text-sm font-medium select-none cursor-pointer overflow-hidden"
+              style={{ background: "rgba(146,64,14,0.1)", color: "#92400e" }}
+              onMouseDown={startHold}
+              onMouseUp={endHold}
+              onMouseLeave={endHold}
+              onTouchStart={startHold}
+              onTouchEnd={endHold}
+            >
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: "rgba(180,67,9,0.25)",
+                  width: `${holdProgress}%`,
+                  transition: "width 50ms linear",
+                }}
+              />
+              <span className="relative z-10">Hold to Stop</span>
+            </div>
+          </div>
+        )}
+
+        {/* Session tomatoes */}
+        {sessionTomatoes.length > 0 && (
+          <div className="mt-6 text-2xl tracking-wide">
+            {sessionTomatoes.map((_, i) => (
+              <span key={i}>🍅</span>
+            ))}
+          </div>
+        )}
+
+        {/* Today's total at bottom of modal */}
+        {todayPomos.length > 0 && (
+          <div className="mt-auto pt-4 text-xs font-medium" style={{ color: "#92400e" }}>
+            {todayPomos.length + sessionTomatoes.length} pomos today · {(todayPomos.reduce((a, p) => a + p.duration_min, 0) + sessionTomatoes.reduce((a, d) => a + d, 0))} min focused
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TripCountdown({ inline, onClick, isActive }: { inline?: boolean; onClick?: () => void; isActive?: boolean }) {
   const tripDate = new Date("2026-05-21T00:00:00");
   const now = new Date();
@@ -1560,6 +1796,8 @@ export default function Dashboard() {
   const [chinaMode, setChinaMode] = useState(false);
   const [chinaEntries, setChinaEntries] = useState<ChinaPrepEntry[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [pomoOpen, setPomoOpen] = useState(false);
+  const [pomoLogs, setPomoLogs] = useState<PomoLog[]>([]);
 
   const togglePractice = useCallback(async (practiceId: string, isDone: boolean) => {
     if (!today || timeOffset !== 0) return;
@@ -1629,6 +1867,29 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   }, [fetchChinaData]);
 
+  const fetchPomoData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/pomo");
+      if (res.ok) {
+        const data = await res.json();
+        setPomoLogs(data);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const handlePomoComplete = useCallback(async (durationMin: number) => {
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    try {
+      await fetch("/api/pomo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, duration_min: durationMin }),
+      });
+      await fetchPomoData();
+    } catch { /* ignore */ }
+  }, [fetchPomoData]);
+
   const fetchData = useCallback(async () => {
     const effectiveDate = getEffectiveDate();
     setToday(effectiveDate);
@@ -1679,7 +1940,10 @@ export default function Dashboard() {
 
     // Fetch China prep data (non-blocking)
     fetchChinaData();
-  }, [fetchChinaData]);
+
+    // Fetch pomo data (non-blocking)
+    fetchPomoData();
+  }, [fetchChinaData, fetchPomoData]);
 
   useEffect(() => {
     fetchData();
@@ -1717,8 +1981,19 @@ export default function Dashboard() {
     logs.filter((l) => l.practice_date === today).map((l) => l.practice_id)
   );
 
+  const todayPomos = pomoLogs.filter((p) => p.date === today);
+  const todayPomoMinutes = todayPomos.reduce((a, p) => a + p.duration_min, 0);
+
   return (
     <main className="max-w-[960px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-12">
+      {/* Pomo modal */}
+      <PomoTimer
+        open={pomoOpen}
+        onClose={() => setPomoOpen(false)}
+        pomoLogs={pomoLogs}
+        onPomoComplete={handlePomoComplete}
+      />
+
       {/* Header with countdown */}
       <div className="flex items-start justify-between mb-6 md:mb-8">
         <div className="flex-1">
@@ -1729,7 +2004,25 @@ export default function Dashboard() {
             {formatDisplayDate(today)}
           </p>
         </div>
-        <TripCountdown inline onClick={() => setChinaMode(!chinaMode)} isActive={chinaMode} />
+        <div className="flex items-start gap-2">
+          <button
+            onClick={() => setPomoOpen(true)}
+            className="relative text-2xl md:text-3xl transition-all duration-200 hover:scale-110 active:scale-95 mt-1"
+            style={{ opacity: todayPomos.length > 0 ? 1 : 0.5, cursor: "pointer", background: "none", border: "none" }}
+            title="Pomodoro Timer"
+          >
+            🍅
+            {todayPomos.length > 0 && (
+              <span
+                className="absolute -top-1 -right-2 text-[10px] font-bold tabular-nums"
+                style={{ color: "var(--text)" }}
+              >
+                {todayPomos.length}
+              </span>
+            )}
+          </button>
+          <TripCountdown inline onClick={() => setChinaMode(!chinaMode)} isActive={chinaMode} />
+        </div>
       </div>
 
       {chinaMode ? (
@@ -1828,6 +2121,21 @@ export default function Dashboard() {
         })}
       </div>
 
+      {/* Today's Pomos */}
+      {todayPomos.length > 0 && (
+        <div
+          className="rounded-xl p-3 md:p-4 mb-6 md:mb-8 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          onClick={() => setPomoOpen(true)}
+        >
+          <div className="text-lg tracking-wider">
+            {todayPomos.map((_, i) => <span key={i}>🍅</span>)}
+          </div>
+          <div className="text-sm text-[var(--text-muted)]">
+            {todayPomos.length} 🍅 · {Math.floor(todayPomoMinutes / 60) > 0 ? `${Math.floor(todayPomoMinutes / 60)}h ` : ""}{todayPomoMinutes % 60}m focused today
+          </div>
+        </div>
+      )}
 
       {/* History view with time navigation */}
       {(() => {
