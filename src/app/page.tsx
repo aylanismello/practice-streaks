@@ -926,23 +926,38 @@ interface FlowLog {
   completed_at: string;
 }
 
+// Persistent AudioContext — created on first user interaction, reused for all chimes
+let _audioCtx: AudioContext | null = null;
+function getAudioCtx(): AudioContext {
+  if (!_audioCtx || _audioCtx.state === "closed") {
+    _audioCtx = new AudioContext();
+  }
+  if (_audioCtx.state === "suspended") {
+    _audioCtx.resume();
+  }
+  return _audioCtx;
+}
+
 function playChime() {
-  const ctx = new AudioContext();
-  const now = ctx.currentTime;
-  // Gentle two-tone chime
-  [523.25, 659.25, 783.99].forEach((freq, i) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0, now + i * 0.15);
-    gain.gain.linearRampToValueAtTime(0.15, now + i * 0.15 + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.8);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(now + i * 0.15);
-    osc.stop(now + i * 0.15 + 0.8);
-  });
-  setTimeout(() => ctx.close(), 2000);
+  try {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+    // Gentle three-tone ascending chime — louder for audibility
+    [523.25, 659.25, 783.99].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, now + i * 0.3);
+      gain.gain.linearRampToValueAtTime(0.4, now + i * 0.3 + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.3 + 1.2);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + i * 0.3);
+      osc.stop(now + i * 0.3 + 1.2);
+    });
+  } catch {
+    // Audio not available — silently fail
+  }
 }
 
 const POMO_BG_IMAGE = "https://images.unsplash.com/photo-1601575972982-e428ea86be7d?q=80&w=3087&auto=format&fit=crop";
@@ -2281,6 +2296,8 @@ export default function Dashboard() {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission();
     }
+    // Warm up AudioContext on user gesture so chime works when timer completes
+    getAudioCtx();
     flowEndTimeRef.current = Date.now() + flowDuration * 60 * 1000; setFlowSecondsLeft(flowDuration * 60);
     setFlowRunning(true);
   }, [flowDuration]);
