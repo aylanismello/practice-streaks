@@ -1008,33 +1008,33 @@ function PomoTimer({
       <div
         className="relative w-full max-w-md mx-4 rounded-3xl p-8 flex flex-col items-center"
         style={{
-          background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%)",
+          background: "var(--bg-card)",
           boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
           minHeight: "420px",
-          border: "1px solid rgba(245,158,11,0.15)",
+          border: "1px solid var(--border)",
         }}
       >
         {/* Close / Minimize */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-sm font-medium rounded-full px-3 py-1"
-          style={{ color: "#f59e0b", background: "rgba(245,158,11,0.1)" }}
+          style={{ color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)" }}
         >
           {running ? "Minimize" : "Close"}
         </button>
 
         {/* Title */}
-        <div className="text-sm font-medium tracking-wide mb-1" style={{ color: "#f59e0b" }}>
+        <div className="text-sm font-medium tracking-wide mb-1" style={{ color: "var(--text-muted)" }}>
           {justCompleted ? "" : running ? "Focusing..." : "🍅 Pomodoro"}
         </div>
 
         {/* Big timer */}
         <div
           className="text-7xl font-light tabular-nums tracking-tight my-6"
-          style={{ color: "#f59e0b", fontVariantNumeric: "tabular-nums" }}
+          style={{ color: "var(--text)", fontVariantNumeric: "tabular-nums" }}
         >
           {justCompleted ? (
-            <span className="text-6xl">🍅 Done!</span>
+            <span className="text-6xl" style={{ color: "#f59e0b" }}>🍅 Done!</span>
           ) : editingDuration && !running ? (
             <div className="flex items-center gap-2">
               <input
@@ -1044,7 +1044,7 @@ function PomoTimer({
                 max={120}
                 defaultValue={duration}
                 className="w-24 text-center text-5xl font-light rounded-xl border-2 bg-transparent outline-none"
-                style={{ borderColor: "#f59e0b", color: "#f59e0b" }}
+                style={{ borderColor: "var(--border)", color: "var(--text)" }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     const v = Math.max(1, Math.min(120, parseInt((e.target as HTMLInputElement).value) || 20));
@@ -1061,7 +1061,7 @@ function PomoTimer({
                 }}
                 autoFocus
               />
-              <span className="text-2xl" style={{ color: "rgba(245,158,11,0.5)" }}>min</span>
+              <span className="text-2xl" style={{ color: "var(--text-muted)" }}>min</span>
             </div>
           ) : (
             <span
@@ -1083,9 +1083,9 @@ function PomoTimer({
                 onClick={() => { onDurationChange(d); onSecondsLeftChange(d * 60); }}
                 className="rounded-full px-4 py-1.5 text-sm font-medium transition-all"
                 style={{
-                  background: duration === d ? "#f59e0b" : "rgba(245,158,11,0.08)",
-                  color: duration === d ? "#1a1a2e" : "#f59e0b",
-                  border: duration === d ? "1px solid #f59e0b" : "1px solid rgba(245,158,11,0.25)",
+                  background: duration === d ? "#f59e0b" : "var(--bg-card)",
+                  color: duration === d ? "#0a0a0f" : "var(--text-muted)",
+                  border: duration === d ? "1px solid #f59e0b" : "1px solid var(--border)",
                 }}
               >
                 {d}m
@@ -1099,7 +1099,7 @@ function PomoTimer({
           <button
             onClick={onStart}
             className="rounded-full px-10 py-3 text-lg font-semibold transition-all active:scale-95"
-            style={{ background: "#f59e0b", color: "#1a1a2e" }}
+            style={{ background: "#f59e0b", color: "#0a0a0f" }}
           >
             Start Focus
           </button>
@@ -1109,7 +1109,7 @@ function PomoTimer({
           <div className="flex flex-col items-center mt-2">
             <div
               className="relative rounded-full px-8 py-3 text-sm font-medium select-none cursor-pointer overflow-hidden"
-              style={{ background: "rgba(245,158,11,0.1)", color: "#f59e0b" }}
+              style={{ background: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
               onMouseDown={startHold}
               onMouseUp={endHold}
               onMouseLeave={endHold}
@@ -1119,7 +1119,7 @@ function PomoTimer({
               <div
                 className="absolute inset-0 rounded-full"
                 style={{
-                  background: "rgba(245,158,11,0.25)",
+                  background: "var(--border)",
                   width: `${holdProgress}%`,
                   transition: "width 50ms linear",
                 }}
@@ -1140,7 +1140,7 @@ function PomoTimer({
 
         {/* Today's total at bottom of modal */}
         {todayPomos.length > 0 && (
-          <div className="mt-auto pt-4 text-xs font-medium" style={{ color: "rgba(245,158,11,0.7)" }}>
+          <div className="mt-auto pt-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>
             {todayPomos.length + sessionTomatoes.length} pomos today · {(todayPomos.reduce((a, p) => a + p.duration_min, 0) + sessionTomatoes.reduce((a, d) => a + d, 0))} min focused
           </div>
         )}
