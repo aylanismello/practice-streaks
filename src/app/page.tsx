@@ -1165,11 +1165,11 @@ function FlowTimer({
               </defs>
               <circle
                 cx={ringSizeMobile / 2} cy={ringSizeMobile / 2} r={radiusMobile}
-                fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={strokeWidth}
+                fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={strokeWidth}
               />
               <circle
                 cx={ringSizeMobile / 2} cy={ringSizeMobile / 2} r={radiusMobile}
-                fill="none" stroke="rgba(56,189,248,0.6)" strokeWidth={strokeWidth} filter="url(#flowGlow)"
+                fill="none" stroke="#38bdf8" strokeWidth={strokeWidth * 2}
                 strokeLinecap="round"
                 strokeDasharray={circumferenceMobile}
                 strokeDashoffset={dashoffsetMobile}
@@ -1180,11 +1180,11 @@ function FlowTimer({
             <svg className="absolute inset-0 hidden md:block" width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ left: -(ringSize - ringSizeMobile) / 2, top: -(ringSize - ringSizeMobile) / 2 }}>
               <circle
                 cx={ringSize / 2} cy={ringSize / 2} r={radius}
-                fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={strokeWidth}
+                fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={strokeWidth}
               />
               <circle
                 cx={ringSize / 2} cy={ringSize / 2} r={radius}
-                fill="none" stroke="rgba(56,189,248,0.6)" strokeWidth={strokeWidth} filter="url(#flowGlow)"
+                fill="none" stroke="#38bdf8" strokeWidth={strokeWidth * 2}
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={dashoffset}
