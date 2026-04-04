@@ -996,6 +996,10 @@ function FlowTimer({
   const [holdProgress, setHoldProgress] = useState(0);
   const [editingDuration, setEditingDuration] = useState(false);
   const [flowShowHistory, setFlowShowHistory] = useState(false);
+  // Always open to timer view, not calendar
+  useEffect(() => {
+    if (open) setFlowShowHistory(false);
+  }, [open]);
   const customInputRef = useRef<HTMLInputElement | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -1165,11 +1169,11 @@ function FlowTimer({
               </defs>
               <circle
                 cx={ringSizeMobile / 2} cy={ringSizeMobile / 2} r={radiusMobile}
-                fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={strokeWidth}
+                fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={strokeWidth}
               />
               <circle
                 cx={ringSizeMobile / 2} cy={ringSizeMobile / 2} r={radiusMobile}
-                fill="none" stroke="#38bdf8" strokeWidth={strokeWidth * 2}
+                fill="none" stroke="rgba(56,189,248,0.6)" strokeWidth={strokeWidth} filter="url(#flowGlow)"
                 strokeLinecap="round"
                 strokeDasharray={circumferenceMobile}
                 strokeDashoffset={dashoffsetMobile}
@@ -1180,11 +1184,11 @@ function FlowTimer({
             <svg className="absolute inset-0 hidden md:block" width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ left: -(ringSize - ringSizeMobile) / 2, top: -(ringSize - ringSizeMobile) / 2 }}>
               <circle
                 cx={ringSize / 2} cy={ringSize / 2} r={radius}
-                fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={strokeWidth}
+                fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={strokeWidth}
               />
               <circle
                 cx={ringSize / 2} cy={ringSize / 2} r={radius}
-                fill="none" stroke="#38bdf8" strokeWidth={strokeWidth * 2}
+                fill="none" stroke="rgba(56,189,248,0.6)" strokeWidth={strokeWidth} filter="url(#flowGlow)"
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={dashoffset}
@@ -2582,7 +2586,7 @@ export default function Dashboard() {
             {formatDisplayDate(today)}
             {flowRunning && !flowOpen ? (
               <button
-                onClick={() => setFlowOpen(true)}
+                onClick={() => { setFlowOpen(true); }}
                 className="inline-flex items-center gap-1 text-xs md:text-sm font-semibold tabular-nums rounded-full px-2 py-0.5 ml-2 transition-all duration-200 hover:scale-105 active:scale-95"
                 style={{
                   color: "#f59e0b",
@@ -2601,7 +2605,7 @@ export default function Dashboard() {
               </button>
             ) : (
               <button
-                onClick={() => setFlowOpen(true)}
+                onClick={() => { setFlowOpen(true); }}
                 className="inline-block ml-1.5 transition-all duration-200 hover:scale-110 active:scale-95"
                 style={{ opacity: todayFlows.length > 0 ? 1 : 0.5, cursor: "pointer", background: "none", border: "none", verticalAlign: "middle", fontSize: "inherit", padding: 0 }}
                 title="Flowdoro Timer"
