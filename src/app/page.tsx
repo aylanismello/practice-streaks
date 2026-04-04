@@ -19,7 +19,7 @@ const WAKE_TARGET = "08:30"; // 8:30 AM — wake up
 const TRACKING_START = "2026-03-21"; // First day practices were logged
 
 interface OuraData {
-  sleep: { average_hrv: number | null; day: string; bedtime_start: string | null; bedtime_end: string | null }[];
+  sleep: { average_hrv: number | null; day: string; bedtime_start: string | null; bedtime_end: string | null; total_sleep_duration: number | null }[];
   readiness: { score: number; day: string }[];
   resilience: { level: string; day: string; contributors?: { sleep_recovery?: number; daytime_recovery?: number; stress?: number } }[];
   dailySleep: { score: number; day: string }[];
@@ -2836,6 +2836,16 @@ export default function Dashboard() {
               <span className={hasWake ? "text-green-400" : "text-amber-400"}>
                 wake {hasWake ? formatIsoTime(lastNight!.bedtime_end!) : "–"}
               </span>
+              {lastNight?.total_sleep_duration ? (() => {
+                const totalMin = Math.round(lastNight.total_sleep_duration / 60);
+                const h = Math.floor(totalMin / 60);
+                const m = totalMin % 60;
+                return (
+                  <span className="text-[var(--text-muted)]">
+                    · {h}h {m}m asleep
+                  </span>
+                );
+              })() : null}
             </div>
           </div>
         );
