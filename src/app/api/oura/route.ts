@@ -11,6 +11,7 @@ interface OuraSleepEntry {
   bedtime_start: string;
   bedtime_end: string;
   total_sleep_duration: number;
+  latency: number;
 }
 
 interface OuraReadinessEntry {
@@ -81,7 +82,7 @@ export async function GET() {
     ]);
 
     const response = NextResponse.json({
-      sleep: sleep.map((s) => ({ average_hrv: s.average_hrv, day: s.day, bedtime_start: s.bedtime_start, bedtime_end: s.bedtime_end, total_sleep_duration: s.total_sleep_duration })),
+      sleep: sleep.map((s) => ({ average_hrv: s.average_hrv, day: s.day, bedtime_start: s.bedtime_start, bedtime_end: s.bedtime_end, total_sleep_duration: s.total_sleep_duration, latency: s.latency })),
       readiness: readiness.map((r) => ({ score: r.score, day: r.day })),
       resilience: resilience.map((r) => ({ level: r.level, day: r.day, contributors: r.contributors })),
       dailySleep: dailySleep.map((s) => ({ score: s.score, day: s.day })),

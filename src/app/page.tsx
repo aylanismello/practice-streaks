@@ -19,7 +19,7 @@ const WAKE_TARGET = "08:30"; // 8:30 AM — wake up
 const TRACKING_START = "2026-03-21"; // First day practices were logged
 
 interface OuraData {
-  sleep: { average_hrv: number | null; day: string; bedtime_start: string | null; bedtime_end: string | null; total_sleep_duration: number | null }[];
+  sleep: { average_hrv: number | null; day: string; bedtime_start: string | null; bedtime_end: string | null; total_sleep_duration: number | null; latency: number | null }[];
   readiness: { score: number; day: string }[];
   resilience: { level: string; day: string; contributors?: { sleep_recovery?: number; daytime_recovery?: number; stress?: number } }[];
   dailySleep: { score: number; day: string }[];
@@ -2816,6 +2816,23 @@ export default function Dashboard() {
         };
         const hasAsleep = !!lastNight?.bedtime_start;
         const hasWake = !!lastNight?.bedtime_end;
+        const asleepIso = (() => {
+          if (!lastNight?.bedtime_start) return null;
+          if (lastNight.latency) {
+            return new Date(new Date(lastNight.bedtime_start).getTime() + lastNight.latency * 1000).toISOString();
+          }
+          return lastNight.bedtime_start;
+        })();
+        const inBedLabel = (() => {
+          if (!lastNight?.bedtime_start || !lastNight?.bedtime_end) return null;
+          const startMs = new Date(lastNight.bedtime_start).getTime();
+          const endMs = new Date(lastNight.bedtime_end).getTime();
+          const totalMin = Math.round((endMs - startMs) / 60000);
+          if (totalMin <= 0) return null;
+          const h = Math.floor(totalMin / 60);
+          const m = totalMin % 60;
+          return `${h}h ${m}m in bed`;
+        })();
         const allPresent = routineDone && hasAsleep && hasWake;
         const borderColor = allPresent ? "rgba(34,197,94,0.3)" : "rgba(251,191,36,0.3)";
         return (
@@ -2830,22 +2847,17 @@ export default function Dashboard() {
               </span>
               <span className="text-[var(--text-muted)]">→</span>
               <span className={hasAsleep ? "text-green-400" : "text-amber-400"}>
-                asleep {hasAsleep ? formatIsoTime(lastNight!.bedtime_start!) : "–"}
+                asleep {asleepIso ? formatIsoTime(asleepIso) : "–"}
               </span>
               <span className="text-[var(--text-muted)]">→</span>
               <span className={hasWake ? "text-green-400" : "text-amber-400"}>
                 wake {hasWake ? formatIsoTime(lastNight!.bedtime_end!) : "–"}
               </span>
-              {lastNight?.total_sleep_duration ? (() => {
-                const totalMin = Math.round(lastNight.total_sleep_duration / 60);
-                const h = Math.floor(totalMin / 60);
-                const m = totalMin % 60;
-                return (
-                  <span className="text-[var(--text-muted)]">
-                    · {h}h {m}m asleep
-                  </span>
-                );
-              })() : null}
+              {inBedLabel ? (
+                <span className="text-[var(--text-muted)]">
+                  · {inBedLabel}
+                </span>
+              ) : null}
             </div>
           </div>
         );
