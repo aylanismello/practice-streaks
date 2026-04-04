@@ -20,6 +20,11 @@ interface OuraReadinessEntry {
 interface OuraResilienceEntry {
   level: string;
   day: string;
+  contributors?: {
+    sleep_recovery?: number;
+    daytime_recovery?: number;
+    stress?: number;
+  };
 }
 
 interface OuraDailySleepEntry {
@@ -56,7 +61,7 @@ export async function GET() {
 
   const end = new Date();
   const start = new Date();
-  start.setDate(start.getDate() - 90);
+  start.setDate(start.getDate() - 365);
 
   const startDate = start.toISOString().slice(0, 10);
   // Add 1 day to end_date since Oura's API end_date is exclusive
@@ -77,7 +82,7 @@ export async function GET() {
     const response = NextResponse.json({
       sleep: sleep.map((s) => ({ average_hrv: s.average_hrv, day: s.day, bedtime_start: s.bedtime_start, bedtime_end: s.bedtime_end })),
       readiness: readiness.map((r) => ({ score: r.score, day: r.day })),
-      resilience: resilience.map((r) => ({ level: r.level, day: r.day })),
+      resilience: resilience.map((r) => ({ level: r.level, day: r.day, contributors: r.contributors })),
       dailySleep: dailySleep.map((s) => ({ score: s.score, day: s.day })),
       stress: stress.map((s) => ({ day: s.day, stress_high: s.stress_high, recovery_high: s.recovery_high, day_summary: s.day_summary })),
     });

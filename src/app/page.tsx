@@ -21,7 +21,7 @@ const TRACKING_START = "2026-03-21"; // First day practices were logged
 interface OuraData {
   sleep: { average_hrv: number | null; day: string; bedtime_start: string | null; bedtime_end: string | null }[];
   readiness: { score: number; day: string }[];
-  resilience: { level: string; day: string }[];
+  resilience: { level: string; day: string; contributors?: { sleep_recovery?: number; daytime_recovery?: number; stress?: number } }[];
   dailySleep: { score: number; day: string }[];
   stress: { day: string; stress_high: number; recovery_high: number; day_summary: string | null }[];
 }
@@ -435,11 +435,50 @@ function BedtimeCard({ sleepData, today, logs, practices }: { sleepData: OuraDat
   );
 }
 
-function HrvChart({ data }: { data: { average_hrv: number | null; day: string }[] }) {
+type HrvTimeRange = "30D" | "90D" | "Q" | "1Y";
+
+function getQuarterStart(date: Date): Date {
+  const month = date.getMonth();
+  const qMonth = month - (month % 3);
+  return new Date(date.getFullYear(), qMonth, 1);
+}
+
+function filterByTimeRange<T extends { day: string }>(data: T[], range: HrvTimeRange): T[] {
+  const now = new Date();
+  let cutoff: Date;
+  switch (range) {
+    case "30D": cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - 30); break;
+    case "90D": cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - 90); break;
+    case "Q": cutoff = getQuarterStart(now); break;
+    case "1Y": cutoff = new Date(now); cutoff.setFullYear(cutoff.getFullYear() - 1); break;
+  }
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  return data.filter((d) => d.day >= cutoffStr);
+}
+
+const RESILIENCE_COLORS: Record<string, string> = {
+  limited: "rgba(239,68,68,0.08)",
+  adequate: "rgba(234,179,8,0.07)",
+  solid: "transparent",
+  strong: "rgba(34,197,94,0.06)",
+  exceptional: "rgba(34,197,94,0.1)",
+};
+
+function HrvChart({
+  data,
+  resilienceData,
+}: {
+  data: { average_hrv: number | null; day: string }[];
+  resilienceData: OuraData["resilience"];
+}) {
+  const [range, setRange] = useState<HrvTimeRange>("90D");
+
   if (data.length === 0) return null;
 
-  const sorted = [...data].sort((a, b) => a.day.localeCompare(b.day));
-  // Deduplicate by day (take last entry per day)
+  const filteredData = filterByTimeRange(data, range);
+  const filteredResilience = filterByTimeRange(resilienceData, range);
+
+  const sorted = [...filteredData].sort((a, b) => a.day.localeCompare(b.day));
   const byDay = new Map<string, number>();
   for (const d of sorted) {
     if (d.average_hrv && d.average_hrv > 0) byDay.set(d.day, d.average_hrv);
@@ -447,32 +486,52 @@ function HrvChart({ data }: { data: { average_hrv: number | null; day: string }[
   const points = Array.from(byDay.entries()).map(([day, hrv]) => ({ day, hrv }));
   if (points.length < 2) return null;
 
+  // Resilience maps
+  const resilienceByDay = new Map<string, { level: string; sleep_recovery?: number }>();
+  for (const r of filteredResilience) {
+    resilienceByDay.set(r.day, { level: r.level, sleep_recovery: r.contributors?.sleep_recovery });
+  }
+
   const hrvValues = points.map((p) => p.hrv);
   const minHrv = Math.floor(Math.min(...hrvValues) * 0.9);
   const maxHrv = Math.ceil(Math.max(...hrvValues) * 1.1);
   const avgHrv = hrvValues.reduce((a, b) => a + b, 0) / hrvValues.length;
 
+  // Resilience Y axis (0-100)
+  const resMin = 0;
+  const resMax = 100;
+
   const w = 600;
-  const h = 200;
-  const pad = { top: 10, right: 30, bottom: 30, left: 40 };
+  const h = 220;
+  const pad = { top: 16, right: 44, bottom: 30, left: 40 };
   const plotW = w - pad.left - pad.right;
   const plotH = h - pad.top - pad.bottom;
 
   const xScale = (i: number) => pad.left + (i / (points.length - 1)) * plotW;
   const yScale = (v: number) =>
     pad.top + plotH - ((v - minHrv) / (maxHrv - minHrv)) * plotH;
+  const resYScale = (v: number) =>
+    pad.top + plotH - ((v - resMin) / (resMax - resMin)) * plotH;
 
   const pathD = points
     .map((p, i) => `${i === 0 ? "M" : "L"}${xScale(i).toFixed(1)},${yScale(p.hrv).toFixed(1)}`)
     .join(" ");
 
+  // Sleep recovery line
+  const resPoints = points
+    .map((p, i) => ({ i, day: p.day, val: resilienceByDay.get(p.day)?.sleep_recovery }))
+    .filter((p): p is { i: number; day: string; val: number } => p.val != null);
+
+  const resPathD = resPoints.length >= 2
+    ? resPoints.map((p, idx) => `${idx === 0 ? "M" : "L"}${xScale(p.i).toFixed(1)},${resYScale(p.val).toFixed(1)}`).join(" ")
+    : null;
+
   const avgY = yScale(avgHrv);
 
-  // X-axis labels: show ~6 labels, don't force last if too close
+  // X-axis labels
   const labelInterval = Math.max(1, Math.floor(points.length / 6));
   const xLabels = points.filter((_, i) => {
     if (i % labelInterval === 0) return true;
-    // Only include last point if it's far enough from the previous label
     if (i === points.length - 1) {
       const prevLabelIdx = Math.floor((points.length - 1) / labelInterval) * labelInterval;
       return (i - prevLabelIdx) > labelInterval * 0.5;
@@ -480,23 +539,62 @@ function HrvChart({ data }: { data: { average_hrv: number | null; day: string }[
     return false;
   });
 
-  // Y-axis labels
+  // Y-axis labels (HRV left)
   const yTicks = 4;
   const yLabels = Array.from({ length: yTicks + 1 }, (_, i) =>
     Math.round(minHrv + (i / yTicks) * (maxHrv - minHrv))
   );
 
+  // Right Y-axis labels (resilience 0-100)
+  const resTicks = [0, 25, 50, 75, 100];
+
+  // Build background band rects for resilience levels
+  const bandRects: { x: number; width: number; color: string }[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const res = resilienceByDay.get(points[i].day);
+    if (!res) continue;
+    const color = RESILIENCE_COLORS[res.level];
+    if (!color || color === "transparent") continue;
+    const x0 = i === 0 ? pad.left : (xScale(i - 1) + xScale(i)) / 2;
+    const x1 = i === points.length - 1 ? w - pad.right : (xScale(i) + xScale(i + 1)) / 2;
+    bandRects.push({ x: x0, width: x1 - x0, color });
+  }
+
+  const ranges: HrvTimeRange[] = ["30D", "90D", "Q", "1Y"];
+
   return (
     <div className="mt-8">
-      <h2 className="text-sm font-medium text-[var(--text-muted)] mb-3 uppercase tracking-wider">
-        ❤️ HRV — Last 90 Days
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-wider">
+          ❤️ HRV + Recovery
+        </h2>
+        <div className="flex gap-1">
+          {ranges.map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+              style={{
+                background: range === r ? "var(--text-muted)" : "transparent",
+                color: range === r ? "var(--bg-card)" : "var(--text-muted)",
+                border: range === r ? "none" : "1px solid var(--border)",
+              }}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+      </div>
       <div
         className="rounded-xl border border-[var(--border)] p-4"
         style={{ background: "var(--bg-card)" }}
       >
-        <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 200 }}>
-          {/* Y grid + labels */}
+        <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 220 }}>
+          {/* Resilience level background bands */}
+          {bandRects.map((b, i) => (
+            <rect key={`band-${i}`} x={b.x} y={pad.top} width={b.width} height={plotH} fill={b.color} />
+          ))}
+          {/* Y grid + HRV labels (left) */}
           {yLabels.map((v) => (
             <g key={v}>
               <line
@@ -518,6 +616,14 @@ function HrvChart({ data }: { data: { average_hrv: number | null; day: string }[
               </text>
             </g>
           ))}
+          {/* Right Y axis labels (resilience) */}
+          {resTicks.map((v) => (
+            <text key={`res-${v}`} x={w - pad.right + 6} y={resYScale(v) + 4} textAnchor="start" fill="#60a5fa" fontSize="9" opacity="0.7">
+              {v}
+            </text>
+          ))}
+          <text x={pad.left} y={pad.top - 4} textAnchor="start" fill="#f59e0b" fontSize="9" opacity="0.7">HRV (ms)</text>
+          <text x={w - pad.right} y={pad.top - 4} textAnchor="end" fill="#60a5fa" fontSize="9" opacity="0.7">Recovery</text>
           {/* Average dashed line */}
           <line
             x1={pad.left}
@@ -539,8 +645,10 @@ function HrvChart({ data }: { data: { average_hrv: number | null; day: string }[
           >
             avg {Math.round(avgHrv)}
           </text>
-          {/* Line */}
+          {/* HRV line */}
           <path d={pathD} fill="none" stroke="#f59e0b" strokeWidth="2" />
+          {/* Sleep recovery line */}
+          {resPathD && <path d={resPathD} fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeDasharray="4,2" opacity="0.8" />}
           {/* X labels */}
           {xLabels.map((p) => {
             const i = points.indexOf(p);
@@ -3154,7 +3262,7 @@ export default function Dashboard() {
       })()}
 
       {/* HRV Trend Chart */}
-      {ouraData && <HrvChart data={ouraData.sleep} />}
+      {ouraData && <HrvChart data={ouraData.sleep} resilienceData={ouraData.resilience} />}
 
       {/* Patterns — practice-to-body correlations */}
       {ouraData && <PatternsSection logs={logs} ouraData={ouraData} />}
