@@ -486,10 +486,11 @@ function HrvChart({
   const points = Array.from(byDay.entries()).map(([day, hrv]) => ({ day, hrv }));
   if (points.length < 2) return null;
 
-  // Resilience maps
-  const resilienceByDay = new Map<string, { level: string; sleep_recovery?: number }>();
+  // Resilience maps — map level to numeric value for step-line
+  const RESILIENCE_LEVEL_VALUE: Record<string, number> = { limited: 20, adequate: 40, solid: 60, strong: 80, exceptional: 100 };
+  const resilienceByDay = new Map<string, { level: string; value: number }>();
   for (const r of filteredResilience) {
-    resilienceByDay.set(r.day, { level: r.level, sleep_recovery: r.contributors?.sleep_recovery });
+    resilienceByDay.set(r.day, { level: r.level, value: RESILIENCE_LEVEL_VALUE[r.level] ?? 0 });
   }
 
   const hrvValues = points.map((p) => p.hrv);
@@ -517,9 +518,9 @@ function HrvChart({
     .map((p, i) => `${i === 0 ? "M" : "L"}${xScale(i).toFixed(1)},${yScale(p.hrv).toFixed(1)}`)
     .join(" ");
 
-  // Sleep recovery line
+  // Resilience level line (step-line)
   const resPoints = points
-    .map((p, i) => ({ i, day: p.day, val: resilienceByDay.get(p.day)?.sleep_recovery }))
+    .map((p, i) => ({ i, day: p.day, val: resilienceByDay.get(p.day)?.value }))
     .filter((p): p is { i: number; day: string; val: number } => p.val != null);
 
   const resPathD = resPoints.length >= 2
@@ -566,7 +567,7 @@ function HrvChart({
     <div className="mt-8">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-wider">
-          ❤️ HRV + Recovery
+          ❤️ HRV + Resilience
         </h2>
         <div className="flex gap-1">
           {ranges.map((r) => (
@@ -623,7 +624,7 @@ function HrvChart({
             </text>
           ))}
           <text x={pad.left} y={pad.top - 4} textAnchor="start" fill="#f59e0b" fontSize="9" opacity="0.7">HRV (ms)</text>
-          <text x={w - pad.right} y={pad.top - 4} textAnchor="end" fill="#60a5fa" fontSize="9" opacity="0.7">Recovery</text>
+          <text x={w - pad.right} y={pad.top - 4} textAnchor="end" fill="#60a5fa" fontSize="9" opacity="0.7">Resilience</text>
           {/* Average dashed line */}
           <line
             x1={pad.left}

@@ -89,7 +89,7 @@ export async function GET() {
 
     response.headers.set(
       "Cache-Control",
-      "public, max-age=3600, s-maxage=3600"
+      "public, max-age=600, s-maxage=600"
     );
 
     return response;
