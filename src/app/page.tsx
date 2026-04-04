@@ -2555,7 +2555,7 @@ export default function Dashboard() {
     const streakStartStr = formatDateLocal(streakStart);
 
     const [typesRes, logsRes] = await Promise.all([
-      supabase.from("practice_types").select("*").order("sort_order"),
+      supabase.from("practice_types").select("*").gte("sort_order", 0).order("sort_order"),
       supabase
         .from("practice_log")
         .select("practice_date, practice_id")
