@@ -14,6 +14,18 @@ export const viewport: Viewport = {
   themeColor: "#0a0a0f",
 };
 
+// Inline script to apply saved theme before first paint (prevents flash)
+const themeScript = `
+(function() {
+  var t = localStorage.getItem('theme');
+  if (t === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', '#f5f5f7');
+  }
+})();
+`;
+
 export default function RootLayout({
   children,
 }: {
@@ -21,6 +33,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-screen">{children}</body>
     </html>
   );
