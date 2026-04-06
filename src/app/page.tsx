@@ -1785,6 +1785,29 @@ export default function Dashboard() {
   const [chinaEntries, setChinaEntries] = useState<ChinaPrepEntry[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [flowOpen, setFlowOpen] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  // Initialize theme from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("theme") as "dark" | "light" | null;
+    if (saved) setTheme(saved);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      localStorage.setItem("theme", next);
+      if (next === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+      } else {
+        document.documentElement.removeAttribute("data-theme");
+      }
+      // Update theme-color meta tag
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", next === "light" ? "#f5f5f7" : "#0a0a0f");
+      return next;
+    });
+  }, []);
 
   // Lock body scroll when flow modal is open
   useEffect(() => {
@@ -2217,6 +2240,20 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-start gap-2">
+          <button
+            onClick={toggleTheme}
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 active:scale-95 mt-0.5"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              cursor: "pointer",
+              fontSize: "14px",
+            }}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
           <TripCountdown inline onClick={() => { setChinaMode(!chinaMode); }} isActive={chinaMode} />
         </div>
       </div>
