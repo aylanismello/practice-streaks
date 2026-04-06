@@ -109,6 +109,69 @@ function StreakBadge({ count }: { count: number }) {
   );
 }
 
+function CelebrationOverlay({ open, onDismiss }: { open: boolean; onDismiss: () => void }) {
+  const confetti = [
+    { left: "10%", delay: "0s", duration: "2.8s", rotate: "18deg", color: "#f472b6" },
+    { left: "18%", delay: "0.2s", duration: "3.2s", rotate: "-14deg", color: "#fb7185" },
+    { left: "26%", delay: "0.1s", duration: "2.9s", rotate: "24deg", color: "#fbbf24" },
+    { left: "34%", delay: "0.35s", duration: "3.1s", rotate: "-20deg", color: "#a78bfa" },
+    { left: "42%", delay: "0.05s", duration: "2.7s", rotate: "16deg", color: "#38bdf8" },
+    { left: "50%", delay: "0.25s", duration: "3s", rotate: "-18deg", color: "#4ade80" },
+    { left: "58%", delay: "0.15s", duration: "2.85s", rotate: "22deg", color: "#fb7185" },
+    { left: "66%", delay: "0.4s", duration: "3.15s", rotate: "-12deg", color: "#f472b6" },
+    { left: "74%", delay: "0.08s", duration: "2.75s", rotate: "20deg", color: "#fbbf24" },
+    { left: "82%", delay: "0.3s", duration: "3.05s", rotate: "-16deg", color: "#38bdf8" },
+    { left: "90%", delay: "0.18s", duration: "2.95s", rotate: "14deg", color: "#a78bfa" },
+  ];
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(onDismiss, 2600);
+    return () => clearTimeout(t);
+  }, [open, onDismiss]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] pointer-events-none flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] animate-celebration-fade" />
+      <div className="relative rounded-3xl px-6 py-5 md:px-8 md:py-6 text-center shadow-2xl border animate-celebration-pop"
+        style={{
+          background: "var(--bg-card)",
+          borderColor: "var(--accent)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
+        }}
+      >
+        <div className="text-[10px] uppercase tracking-[0.4em] mb-2" style={{ color: "var(--text-muted)" }}>
+          big completion energy
+        </div>
+        <div className="text-3xl md:text-4xl font-semibold tracking-tight mb-1" style={{ color: "var(--text)" }}>
+          you're not a bitch
+        </div>
+        <div className="text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
+          8 for 8. clean sweep. no notes.
+        </div>
+        <div className="absolute inset-x-0 -top-3 h-10 overflow-hidden">
+          {confetti.map((piece, idx) => (
+            <span
+              key={idx}
+              className="absolute top-0 h-3 w-2 rounded-sm animate-celebration-confetti"
+              style={{
+                left: piece.left,
+                background: piece.color,
+                animationDelay: piece.delay,
+                animationDuration: piece.duration,
+                transform: `rotate(${piece.rotate})`,
+                opacity: 0.95,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function HrvCard({ avg, delta }: { avg: number; delta: number | null }) {
   const isStable = delta === null || Math.abs(delta) <= 3;
@@ -1825,6 +1888,7 @@ export default function Dashboard() {
   const [flowSessionWaves, setFlowSessionWaves] = useState<number[]>([]);
   const [flowJustCompleted, setFlowJustCompleted] = useState(false);
   const [nighttimeLogs, setNighttimeLogs] = useState<{ practice_date: string; completed_at: string | null }[]>([]);
+  const [celebrationOpen, setCelebrationOpen] = useState(false);
   const flowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const flowActiveRef = useRef<{ start_time: string; duration_min: number } | null>(null);
   const flowCompletedRef = useRef(false);
@@ -1833,6 +1897,8 @@ export default function Dashboard() {
     if (!today || timeOffset !== 0) return;
     setTogglingId(practiceId);
     try {
+      const todayCountBefore = logs.filter((l) => l.practice_date === today).length;
+      const willCompleteEight = !isDone && todayCountBefore === 7;
       if (isDone) {
         await fetch("/api/log", {
           method: "DELETE",
@@ -1856,10 +1922,11 @@ export default function Dashboard() {
         .gte("practice_date", streakStartStr)
         .lte("practice_date", today);
       if (data) setLogs(data);
+      if (willCompleteEight) setCelebrationOpen(true);
     } finally {
       setTogglingId(null);
     }
-  }, [today, timeOffset]);
+  }, [today, timeOffset, logs]);
 
   const fetchChinaData = useCallback(async () => {
     try {
@@ -2179,6 +2246,7 @@ export default function Dashboard() {
 
   return (
     <main className="max-w-[960px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-12">
+      <CelebrationOverlay open={celebrationOpen} onDismiss={() => setCelebrationOpen(false)} />
       {/* Flow modal */}
       <FlowTimer
         open={flowOpen}

@@ -12,14 +12,14 @@
 }
 
 [data-theme="light"] {
-  --bg: #f5f5f7;
+  --bg: #f8f8fa;
   --bg-card: #ffffff;
-  --bg-card-hover: #f0f0f4;
-  --text: #1a1a2e;
-  --text-muted: #6b6b80;
+  --bg-card-hover: #f2f2f6;
+  --text: #1c1c2e;
+  --text-muted: #7c7c92;
   --accent: #16a34a;
-  --accent-glow: rgba(22, 163, 74, 0.1);
-  --border: #e2e2ea;
+  --accent-glow: rgba(22, 163, 74, 0.08);
+  --border: #e4e4ec;
 }
 
 body {
@@ -29,10 +29,38 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Smooth theme transition */
+*,
+*::before,
+*::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.15s ease;
+}
+
+/* Exclude animations and transforms from transition */
+.animate-fade-in,
+.animate-check-pop,
+[style*="animation"] {
+  transition: none !important;
+}
+
 /* Light mode overrides for tailwind color classes */
 [data-theme="light"] .text-green-400 { color: #16a34a; }
 [data-theme="light"] .text-amber-400 { color: #d97706; }
 [data-theme="light"] .text-red-400 { color: #dc2626; }
+[data-theme="light"] .text-purple-400 { color: #9333ea; }
+
+/* Light mode card shadows for depth */
+[data-theme="light"] .rounded-xl {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* Light mode scrollbar */
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
@@ -51,4 +79,38 @@ body {
 
 .animate-check-pop {
   animation: checkPop 0.3s ease-out forwards;
+}
+
+@keyframes celebrationPop {
+  0% { opacity: 0; transform: translateY(14px) scale(0.94); }
+  55% { opacity: 1; transform: translateY(0) scale(1.03); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes celebrationFade {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes celebrationConfetti {
+  0% { opacity: 0; transform: translateY(-12px) rotate(0deg) scale(0.8); }
+  10% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(190px) rotate(220deg) scale(1.05); }
+}
+
+.animate-celebration-pop {
+  animation: celebrationPop 320ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+}
+
+.animate-celebration-fade {
+  animation: celebrationFade 2.6s ease-out forwards;
+}
+
+.animate-celebration-confetti {
+  animation-name: celebrationConfetti;
+  animation-timing-function: ease-out;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
 }
