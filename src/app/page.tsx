@@ -2151,7 +2151,14 @@ export default function Dashboard() {
         .lte("practice_date", effectiveDate),
     ]);
 
-    if (typesRes.data) setPractices(typesRes.data);
+    if (typesRes.data) {
+      const hasJournal = typesRes.data.some((practice) => practice.id === "journal");
+      setPractices(
+        hasJournal
+          ? typesRes.data
+          : [...typesRes.data, { id: "journal", name: "Journal", emoji: "📓", sort_order: 99 }]
+      );
+    }
     if (logsRes.data) setLogs(logsRes.data);
     setLoading(false);
 
@@ -2334,7 +2341,7 @@ export default function Dashboard() {
       <TonightCard logs={logs} practices={practices} today={today} sleepData={ouraData?.sleep ?? []} />
 
       {/* Practice cards */}
-      <div className="grid grid-cols-4 gap-2 md:gap-3 mb-8 md:mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3 mb-8 md:mb-10">
         {practices.map((practice, i) => {
           const done = todayLogs.has(practice.id);
           const { count: streak, doneToday } = calculateStreak(practice.id, logs, today);
