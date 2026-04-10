@@ -2466,8 +2466,24 @@ export default function Dashboard() {
                   <span className="text-[var(--text-muted)] text-lg md:text-xl">○</span>
                 )}
               </div>
-              <div className="text-sm md:text-base font-medium leading-tight">
+              <div className="text-sm md:text-base font-medium leading-tight flex items-center gap-1.5">
                 {practice.name}
+                {practice.name === "Vagal Tone" && (
+                  <a
+                    href="https://youtube.com/playlist?list=PL7dztrxiJ7iwWHcrUso91UujntwuGLEfp&si=uoZIp1lQ7Dg8Dnvq"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open Vagal Tone YouTube playlist"
+                    title="Open YouTube playlist"
+                    className="inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border transition-colors hover:opacity-80"
+                    style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor" aria-hidden="true">
+                      <path d="M21.8 8.5s-.2-1.4-.8-2c-.8-.8-1.7-.8-2.1-.9C16 5.3 12 5.3 12 5.3h0s-4 0-6.9.3c-.4 0-1.3.1-2.1.9-.6.6-.8 2-.8 2S2 10.1 2 11.6v.8c0 1.5.2 3.1.2 3.1s.2 1.4.8 2c.8.8 1.8.8 2.2.9 1.6.2 6.8.3 6.8.3s4 0 6.9-.3c.4 0 1.3-.1 2.1-.9.6-.6.8-2 .8-2s.2-1.6.2-3.1v-.8c0-1.5-.2-3.1-.2-3.1zM9.6 14.1V9.8l4.5 2.2-4.5 2.1z" />
+                    </svg>
+                  </a>
+                )}
               </div>
               {streak > 0 && (
                 <div className="text-xs md:text-sm mt-1 text-[var(--text-muted)]">
