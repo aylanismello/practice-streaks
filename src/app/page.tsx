@@ -1585,6 +1585,7 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
 
   const currentMonthConfig = monthConfigs[monthIndex];
   const monthDays = buildMonthDays(currentMonthConfig.year, currentMonthConfig.month);
+  const yang24PlaylistUrl = "https://www.youtube.com/playlist?list=PL7dztrxiJ7iyErVqv9H2LhxfsfRqYnMSG&si=wf9wOfBui4FwAMXn";
 
   function handleDayClick(day: string) {
     const existing = entryByDate.get(day);
@@ -1640,6 +1641,19 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
               {fullRuns} full run{fullRuns !== 1 ? "s" : ""}
             </div>
           </div>
+          <a
+            href={yang24PlaylistUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open Yang 24 YouTube playlist"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors"
+            style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+            title="Open YouTube playlist"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+              <path d="M21.8 8.5s-.2-1.4-.8-2c-.8-.8-1.7-.8-2.1-.9C16 5.3 12 5.3 12 5.3h0s-4 0-6.9.3c-.4 0-1.3.1-2.1.9-.6.6-.8 2-.8 2S2 10.1 2 11.6v.8c0 1.5.2 3.1.2 3.1s.2 1.4.8 2c.8.8 1.8.8 2.2.9 1.6.2 6.8.3 6.8.3s4 0 6.9-.3c.4 0 1.3-.1 2.1-.9.6-.6.8-2 .8-2s.2-1.6.2-3.1v-.8c0-1.5-.2-3.1-.2-3.1zM9.6 14.1V9.8l4.5 2.2-4.5 2.1z" />
+            </svg>
+          </a>
         </div>
         {/* Progress bar */}
         <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
