@@ -1570,35 +1570,35 @@ function getYang24Move(moveNumber: number | null | undefined) {
 function getYang24MoveUrl(moveNumber: number | null | undefined) {
   const move = getYang24Move(moveNumber);
   if (!move) return null;
-  const yang24VideoIds: readonly string[] = [
-    "9M35HX110Ek",
-    "BYkm7iV3VRE",
-    "heZU2hE5ldM",
-    "Z_ofRexZT40",
-    "Fr6GBPoEKFc",
-    "XOkDfwACQJI",
-    "MLiAZ0sInNk",
-    "gxv5bYlv-iY",
-    "u-s-fxeH9TE",
-    "ALyToJAzRQA",
-    "vRqIqINdwsc",
-    "B8MaOkcX5E8",
-    "Wi4zejBNwS0",
-    "POciAjxs2kI",
-    "mhNN-spKJWc",
-    "B8KpmFcSUkM",
-    "-fbDZsxVVDw",
-    "Yzk66OmdgzY",
-    "cb0ckwRr_7g",
-    "nrRLBrY4HLg",
-    "UD0ENS_Qxfc",
-    "NbHQprFpvPQ",
-    "5bTCUDWCS7g",
-    "rs7Lrmlmquk",
-  ];
-  // Playlist order is shifted by one relative to the move numbers in the app.
-  // Example verified from the accessible public item: playlist item 5 is labeled "#4".
-  const videoId = yang24VideoIds[move.number] ?? yang24VideoIds[move.number - 1];
+  // Video IDs from the Yang 24 playlist, one per move (moves 1–23).
+  // The original array had an extra intro video (9M35HX110Ek) at the start
+  // that shifted every mapping by -1. Move 24 video is not yet available.
+  const yang24VideoIds = [
+    "BYkm7iV3VRE",  // move 1
+    "heZU2hE5ldM",  // move 2
+    "Z_ofRexZT40",  // move 3
+    "Fr6GBPoEKFc",  // move 4
+    "XOkDfwACQJI",  // move 5
+    "MLiAZ0sInNk",  // move 6
+    "gxv5bYlv-iY",  // move 7
+    "u-s-fxeH9TE",  // move 8
+    "ALyToJAzRQA",  // move 9
+    "vRqIqINdwsc",  // move 10
+    "B8MaOkcX5E8",  // move 11
+    "Wi4zejBNwS0",  // move 12
+    "POciAjxs2kI",  // move 13
+    "mhNN-spKJWc",  // move 14
+    "B8KpmFcSUkM",  // move 15
+    "-fbDZsxVVDw",  // move 16
+    "Yzk66OmdgzY",  // move 17
+    "cb0ckwRr_7g",  // move 18
+    "nrRLBrY4HLg",  // move 19
+    "UD0ENS_Qxfc",  // move 20
+    "NbHQprFpvPQ",  // move 21
+    "5bTCUDWCS7g",  // move 22
+    "rs7Lrmlmquk",  // move 23
+  ] as const;
+  const videoId = yang24VideoIds[move.number - 1];
   return videoId ? `https://www.youtube.com/watch?v=${videoId}` : null;
 }
 
@@ -2466,8 +2466,24 @@ export default function Dashboard() {
                   <span className="text-[var(--text-muted)] text-lg md:text-xl">○</span>
                 )}
               </div>
-              <div className="text-sm md:text-base font-medium leading-tight">
+              <div className="text-sm md:text-base font-medium leading-tight flex items-center gap-1.5">
                 {practice.name}
+                {practice.name === "Vagal Tone" && (
+                  <a
+                    href="https://youtube.com/playlist?list=PL7dztrxiJ7iwWHcrUso91UujntwuGLEfp&si=uoZIp1lQ7Dg8Dnvq"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open Vagal Tone YouTube playlist"
+                    title="Open YouTube playlist"
+                    className="inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border transition-colors hover:opacity-80"
+                    style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor" aria-hidden="true">
+                      <path d="M21.8 8.5s-.2-1.4-.8-2c-.8-.8-1.7-.8-2.1-.9C16 5.3 12 5.3 12 5.3h0s-4 0-6.9.3c-.4 0-1.3.1-2.1.9-.6.6-.8 2-.8 2S2 10.1 2 11.6v.8c0 1.5.2 3.1.2 3.1s.2 1.4.8 2c.8.8 1.8.8 2.2.9 1.6.2 6.8.3 6.8.3s4 0 6.9-.3c.4 0 1.3-.1 2.1-.9.6-.6.8-2 .8-2s.2-1.6.2-3.1v-.8c0-1.5-.2-3.1-.2-3.1zM9.6 14.1V9.8l4.5 2.2-4.5 2.1z" />
+                    </svg>
+                  </a>
+                )}
               </div>
               {streak > 0 && (
                 <div className="text-xs md:text-sm mt-1 text-[var(--text-muted)]">
