@@ -1570,7 +1570,7 @@ function getYang24Move(moveNumber: number | null | undefined) {
 function getYang24MoveUrl(moveNumber: number | null | undefined) {
   const move = getYang24Move(moveNumber);
   if (!move) return null;
-  const yang24VideoIds = [
+  const yang24VideoIds: readonly string[] = [
     "9M35HX110Ek",
     "BYkm7iV3VRE",
     "heZU2hE5ldM",
@@ -1595,8 +1595,10 @@ function getYang24MoveUrl(moveNumber: number | null | undefined) {
     "NbHQprFpvPQ",
     "5bTCUDWCS7g",
     "rs7Lrmlmquk",
-  ] as const;
-  const videoId = yang24VideoIds[move.number - 1];
+  ];
+  // Playlist order is shifted by one relative to the move numbers in the app.
+  // Example verified from the accessible public item: playlist item 5 is labeled "#4".
+  const videoId = yang24VideoIds[move.number] ?? yang24VideoIds[move.number - 1];
   return videoId ? `https://www.youtube.com/watch?v=${videoId}` : null;
 }
 
