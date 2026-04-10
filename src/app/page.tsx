@@ -1570,8 +1570,34 @@ function getYang24Move(moveNumber: number | null | undefined) {
 function getYang24MoveUrl(moveNumber: number | null | undefined) {
   const move = getYang24Move(moveNumber);
   if (!move) return null;
-  const query = encodeURIComponent(`yang 24 ${move.number} ${move.name}`);
-  return `https://www.youtube.com/results?search_query=${query}`;
+  const yang24VideoIds = [
+    "9M35HX110Ek",
+    "BYkm7iV3VRE",
+    "heZU2hE5ldM",
+    "Z_ofRexZT40",
+    "Fr6GBPoEKFc",
+    "XOkDfwACQJI",
+    "MLiAZ0sInNk",
+    "gxv5bYlv-iY",
+    "u-s-fxeH9TE",
+    "ALyToJAzRQA",
+    "vRqIqINdwsc",
+    "B8MaOkcX5E8",
+    "Wi4zejBNwS0",
+    "POciAjxs2kI",
+    "mhNN-spKJWc",
+    "B8KpmFcSUkM",
+    "-fbDZsxVVDw",
+    "Yzk66OmdgzY",
+    "cb0ckwRr_7g",
+    "nrRLBrY4HLg",
+    "UD0ENS_Qxfc",
+    "NbHQprFpvPQ",
+    "5bTCUDWCS7g",
+    "rs7Lrmlmquk",
+  ] as const;
+  const videoId = yang24VideoIds[move.number - 1];
+  return videoId ? `https://www.youtube.com/watch?v=${videoId}` : null;
 }
 
 function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean }) => void; onDelete: (date: string) => Promise<void> }) {
