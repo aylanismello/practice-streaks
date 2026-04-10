@@ -1570,35 +1570,35 @@ function getYang24Move(moveNumber: number | null | undefined) {
 function getYang24MoveUrl(moveNumber: number | null | undefined) {
   const move = getYang24Move(moveNumber);
   if (!move) return null;
-  const yang24VideoIds: readonly string[] = [
-    "9M35HX110Ek",
-    "BYkm7iV3VRE",
-    "heZU2hE5ldM",
-    "Z_ofRexZT40",
-    "Fr6GBPoEKFc",
-    "XOkDfwACQJI",
-    "MLiAZ0sInNk",
-    "gxv5bYlv-iY",
-    "u-s-fxeH9TE",
-    "ALyToJAzRQA",
-    "vRqIqINdwsc",
-    "B8MaOkcX5E8",
-    "Wi4zejBNwS0",
-    "POciAjxs2kI",
-    "mhNN-spKJWc",
-    "B8KpmFcSUkM",
-    "-fbDZsxVVDw",
-    "Yzk66OmdgzY",
-    "cb0ckwRr_7g",
-    "nrRLBrY4HLg",
-    "UD0ENS_Qxfc",
-    "NbHQprFpvPQ",
-    "5bTCUDWCS7g",
-    "rs7Lrmlmquk",
-  ];
-  // Playlist order is shifted by one relative to the move numbers in the app.
-  // Example verified from the accessible public item: playlist item 5 is labeled "#4".
-  const videoId = yang24VideoIds[move.number] ?? yang24VideoIds[move.number - 1];
+  // Video IDs from the Yang 24 playlist, one per move (moves 1–23).
+  // The original array had an extra intro video (9M35HX110Ek) at the start
+  // that shifted every mapping by -1. Move 24 video is not yet available.
+  const yang24VideoIds = [
+    "BYkm7iV3VRE",  // move 1
+    "heZU2hE5ldM",  // move 2
+    "Z_ofRexZT40",  // move 3
+    "Fr6GBPoEKFc",  // move 4
+    "XOkDfwACQJI",  // move 5
+    "MLiAZ0sInNk",  // move 6
+    "gxv5bYlv-iY",  // move 7
+    "u-s-fxeH9TE",  // move 8
+    "ALyToJAzRQA",  // move 9
+    "vRqIqINdwsc",  // move 10
+    "B8MaOkcX5E8",  // move 11
+    "Wi4zejBNwS0",  // move 12
+    "POciAjxs2kI",  // move 13
+    "mhNN-spKJWc",  // move 14
+    "B8KpmFcSUkM",  // move 15
+    "-fbDZsxVVDw",  // move 16
+    "Yzk66OmdgzY",  // move 17
+    "cb0ckwRr_7g",  // move 18
+    "nrRLBrY4HLg",  // move 19
+    "UD0ENS_Qxfc",  // move 20
+    "NbHQprFpvPQ",  // move 21
+    "5bTCUDWCS7g",  // move 22
+    "rs7Lrmlmquk",  // move 23
+  ] as const;
+  const videoId = yang24VideoIds[move.number - 1];
   return videoId ? `https://www.youtube.com/watch?v=${videoId}` : null;
 }
 
