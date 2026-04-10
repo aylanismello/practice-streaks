@@ -1535,12 +1535,54 @@ interface ChinaPrepEntry {
   notes: string | null;
 }
 
+const YANG24_MOVES = [
+  { number: 1, name: "Commencement" },
+  { number: 2, name: "Part the Wild Horse's Mane" },
+  { number: 3, name: "White Crane Spreads Wings" },
+  { number: 4, name: "Brush Knee and Push" },
+  { number: 5, name: "Play the Lute" },
+  { number: 6, name: "Step Back and Repulse Monkey" },
+  { number: 7, name: "Grasp the Sparrow's Tail" },
+  { number: 8, name: "Single Whip" },
+  { number: 9, name: "Wave Hands Like Clouds" },
+  { number: 10, name: "Single Whip" },
+  { number: 11, name: "High Pat on Horse" },
+  { number: 12, name: "Kick With Right Heel" },
+  { number: 13, name: "Strike Ears with Both Fists" },
+  { number: 14, name: "Turn Body and Left Leg Kick" },
+  { number: 15, name: "Left Lower Stance" },
+  { number: 16, name: "Golden Rooster Stands on One Leg" },
+  { number: 17, name: "Right Lower Stance" },
+  { number: 18, name: "Snake Creeps Down" },
+  { number: 19, name: "Step Forward" },
+  { number: 20, name: "Deflect Down" },
+  { number: 21, name: "Parry and Punch" },
+  { number: 22, name: "Apparent Close Up" },
+  { number: 23, name: "Cross Hands" },
+  { number: 24, name: "Closing Form" },
+] as const;
+
+function getYang24Move(moveNumber: number | null | undefined) {
+  if (!moveNumber) return null;
+  return YANG24_MOVES.find((move) => move.number === moveNumber) ?? null;
+}
+
+function getYang24MoveUrl(moveNumber: number | null | undefined) {
+  const move = getYang24Move(moveNumber);
+  if (!move) return null;
+  const query = encodeURIComponent(`yang 24 ${move.number} ${move.name}`);
+  return `https://www.youtube.com/results?search_query=${query}`;
+}
+
 function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean }) => void; onDelete: (date: string) => Promise<void> }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [moveInput, setMoveInput] = useState("");
   const [fullRunInput, setFullRunInput] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const selectedMove = getYang24Move(moveInput ? parseInt(moveInput, 10) : null);
+  const selectedMoveUrl = getYang24MoveUrl(moveInput ? parseInt(moveInput, 10) : null);
 
   // Single-month navigation: 0 = April, 1 = May
   const now = new Date();
@@ -1781,7 +1823,7 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
             </div>
 
             <div className="flex flex-col gap-4 mb-5">
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm flex-wrap">
                 <span className="text-[var(--text-muted)]">Learn move</span>
                 <input
                   type="number"
@@ -1793,6 +1835,22 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
                   style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)" }}
                   placeholder="#"
                 />
+                {selectedMove && selectedMoveUrl && (
+                  <a
+                    href={selectedMoveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open YouTube for move ${selectedMove.number}, ${selectedMove.name}`}
+                    title={`Watch ${selectedMove.name} on YouTube`}
+                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors"
+                    style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+                      <path d="M21.8 8.5s-.2-1.4-.8-2c-.8-.8-1.7-.8-2.1-.9C16 5.3 12 5.3 12 5.3h0s-4 0-6.9.3c-.4 0-1.3.1-2.1.9-.6.6-.8 2-.8 2S2 10.1 2 11.6v.8c0 1.5.2 3.1.2 3.1s.2 1.4.8 2c.8.8 1.8.8 2.2.9 1.6.2 6.8.3 6.8.3s4 0 6.9-.3c.4 0 1.3-.1 2.1-.9.6-.6.8-2 .8-2s.2-1.6.2-3.1v-.8c0-1.5-.2-3.1-.2-3.1zM9.6 14.1V9.8l4.5 2.2-4.5 2.1z" />
+                    </svg>
+                    <span className="max-w-[14rem] truncate">{selectedMove.name}</span>
+                  </a>
+                )}
               </label>
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <button
