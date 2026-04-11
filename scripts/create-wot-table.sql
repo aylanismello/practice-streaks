@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS wot_log (
   date date PRIMARY KEY,
-  color text NOT NULL CHECK (color IN ('green', 'yellow', 'red')),
+  color text NOT NULL CHECK (color IN ('green', 'yellow', 'orange', 'red', 'deep_red')),
+  legacy_color text,
   created_at timestamptz DEFAULT now()
 );
 ALTER TABLE wot_log ENABLE ROW LEVEL SECURITY;

@@ -38,9 +38,12 @@ interface PracticeLog {
   practice_id: string;
 }
 
+import { wotCssColor, wotEmoji, type WotLevel } from "@/lib/wot";
+
 interface WotEntry {
   date: string;
-  color: "green" | "yellow" | "red";
+  color: WotLevel;
+  legacy_color?: string | null;
 }
 
 interface FocusmateSession {
@@ -2820,12 +2823,11 @@ export default function Dashboard() {
                         </td>
                         {rangeDays.map((day) => {
                           const wot = wotLogs.find((w) => w.date === day);
-                          const wotEmoji: Record<string, string> = { green: "🟢", yellow: "🟡", red: "🔴" };
                           return (
                             <td key={day} className="text-center py-1.5 px-1">
                               {wot ? (
                                 <span className="text-sm" title={`WOT: ${wot.color}`}>
-                                  {wotEmoji[wot.color]}
+                                  {wotEmoji(wot.color)}
                                 </span>
                               ) : null}
                             </td>
@@ -2891,11 +2893,10 @@ export default function Dashboard() {
                         {(() => {
                           const wot = wotLogs.find((w) => w.date === day);
                           if (!wot) return null;
-                          const wotColors: Record<string, string> = { green: "#4ade80", yellow: "#fbbf24", red: "#f87171" };
                           return (
                             <div
                               className="w-[6px] h-[6px] rounded-full mt-0.5"
-                              style={{ backgroundColor: wotColors[wot.color] }}
+                              style={{ backgroundColor: wotCssColor(wot.color) }}
                               title={`WOT: ${wot.color}`}
                             />
                           );

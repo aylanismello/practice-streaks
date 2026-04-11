@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { normalizeWotLevel, WOT_LEVELS } from "@/lib/wot";
 
 export async function GET() {
   try {
@@ -10,7 +11,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("wot_log")
-      .select("date, color")
+      .select("date, color, legacy_color")
       .gte("date", sinceStr)
       .order("date", { ascending: false });
 
@@ -29,24 +30,18 @@ export async function POST(req: NextRequest) {
     const { date, color } = await req.json();
 
     if (!date || !color) {
-      return NextResponse.json(
-        { error: "date and color are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "date and color are required" }, { status: 400 });
     }
 
-    if (!["green", "yellow", "red"].includes(color)) {
-      return NextResponse.json(
-        { error: "color must be green, yellow, or red" },
-        { status: 400 }
-      );
+    const normalized = normalizeWotLevel(color);
+    if (!normalized || !WOT_LEVELS.includes(normalized)) {
+      return NextResponse.json({ error: "invalid wot level" }, { status: 400 });
     }
 
     const supabase = createServiceClient();
-
     const { data, error } = await supabase
       .from("wot_log")
-      .upsert({ date, color }, { onConflict: "date" })
+      .upsert({ date, color: normalized }, { onConflict: "date" })
       .select()
       .single();
 
