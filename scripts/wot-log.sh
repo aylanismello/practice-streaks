@@ -7,14 +7,18 @@ SUPABASE_SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 COLOR="${1:-}"
 DATE="${2:-}"
 
-if [[ -z "$COLOR" ]] || [[ ! "$COLOR" =~ ^(green|yellow|red)$ ]]; then
-  echo "Usage: wot-log.sh <green|yellow|red> [YYYY-MM-DD]"
-  echo "If no date, uses today with 4am PT day boundary."
+if [[ -z "$COLOR" ]] || [[ ! "$COLOR" =~ ^(green|yellow|orange|red|deep_red|amber|maroon|crimson)$ ]]; then
+  echo "Usage: wot-log.sh <green|yellow|orange|red|deep_red> [YYYY-MM-DD]"
+  echo "Aliases: amber→orange, maroon/crimson→deep_red. If no date, uses today with 4am PT day boundary."
   exit 1
 fi
 
+case "$COLOR" in
+  amber) COLOR="orange" ;;
+  maroon|crimson) COLOR="deep_red" ;;
+esac
+
 if [[ -z "$DATE" ]]; then
-  # 4am PT day boundary: if before 4am PT, use yesterday
   HOUR_PT=$(TZ="America/Los_Angeles" date +%H)
   if [ "$HOUR_PT" -lt 4 ]; then
     DATE=$(TZ="America/Los_Angeles" date -v-1d +%Y-%m-%d 2>/dev/null || TZ="America/Los_Angeles" date -d "yesterday" +%Y-%m-%d)
