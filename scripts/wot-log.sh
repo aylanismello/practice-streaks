@@ -7,15 +7,17 @@ SUPABASE_SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 COLOR="${1:-}"
 DATE="${2:-}"
 
-if [[ -z "$COLOR" ]] || [[ ! "$COLOR" =~ ^(green|yellow|orange|red|deep_red|amber|maroon|crimson)$ ]]; then
-  echo "Usage: wot-log.sh <green|yellow|orange|red|deep_red> [YYYY-MM-DD]"
-  echo "Aliases: amber→orange, maroon/crimson→deep_red. If no date, uses today with 4am PT day boundary."
+if [[ -z "$COLOR" ]] || [[ ! "$COLOR" =~ ^(green|yellow_green|yellow|orange|red|deep_red|amber|maroon|crimson|solid|medium|tight)$ ]]; then
+  echo "Usage: wot-log.sh <green|yellow_green|yellow|orange|red> [YYYY-MM-DD]"
+  echo "Aliases: solid/yellow-green→yellow_green, medium→yellow, tight/amber→orange, maroon/crimson/deep_red→red. If no date, uses today with 4am PT day boundary."
   exit 1
 fi
 
 case "$COLOR" in
-  amber) COLOR="orange" ;;
-  maroon|crimson) COLOR="deep_red" ;;
+  solid|yellow-green) COLOR="yellow_green" ;;
+  medium) COLOR="yellow" ;;
+  tight|amber) COLOR="orange" ;;
+  maroon|crimson|deep_red) COLOR="red" ;;
 esac
 
 if [[ -z "$DATE" ]]; then

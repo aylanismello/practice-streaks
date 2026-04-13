@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { effectiveWotLevel } from "@/lib/wot";
 import {
   getEffectiveDate,
   getLast7Days,
@@ -149,7 +150,7 @@ function CelebrationOverlay({ open, onDismiss }: { open: boolean; onDismiss: () 
           big completion energy
         </div>
         <div className="text-3xl md:text-4xl font-semibold tracking-tight mb-1" style={{ color: "var(--text)" }}>
-          you're not a bitch
+          you&apos;re not a bitch
         </div>
         <div className="text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
           8 for 8. clean sweep. no notes.
@@ -2827,7 +2828,7 @@ export default function Dashboard() {
                             <td key={day} className="text-center py-1.5 px-1">
                               {wot ? (
                                 <span className="text-sm" title={`WOT: ${wot.color}`}>
-                                  {wotEmoji(wot.color)}
+                                  {wotEmoji(effectiveWotLevel(wot))}
                                 </span>
                               ) : null}
                             </td>
@@ -2896,8 +2897,8 @@ export default function Dashboard() {
                           return (
                             <div
                               className="w-[6px] h-[6px] rounded-full mt-0.5"
-                              style={{ backgroundColor: wotCssColor(wot.color) }}
-                              title={`WOT: ${wot.color}`}
+                              style={{ backgroundColor: wotCssColor(effectiveWotLevel(wot)) }}
+                              title={`WOT: ${effectiveWotLevel(wot)}`}
                             />
                           );
                         })()}

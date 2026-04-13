@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS wot_log (
   date date PRIMARY KEY,
-  color text NOT NULL CHECK (color IN ('green', 'yellow', 'orange', 'red', 'deep_red')),
+  color text NOT NULL CHECK (color IN ('green', 'yellow_green', 'yellow', 'orange', 'red')),
   legacy_color text,
   created_at timestamptz DEFAULT now()
 );

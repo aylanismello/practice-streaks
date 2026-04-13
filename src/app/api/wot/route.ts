@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
-import { normalizeWotLevel, WOT_LEVELS } from "@/lib/wot";
+import { effectiveWotLevel, normalizeWotLevel, WOT_LEVELS } from "@/lib/wot";
 
 export async function GET() {
   try {
@@ -19,7 +19,10 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(data?.map((row) => ({
+      ...row,
+      display_color: effectiveWotLevel(row),
+    })));
   } catch {
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
