@@ -1546,8 +1546,7 @@ const YANG24_MOVES = [
   { number: 4, name: "Brush Knee and Push" },
   { number: 5, name: "Play the Lute" },
   { number: 6, name: "Step Back and Repulse Monkey" },
-  { number: 7, name: "Grasp the Sparrow's Tail" },
-  { number: 8, name: "Single Whip" },
+  { number: 7, name: "Grasp the Sparrow's Tail / Single Whip" },
   { number: 9, name: "Wave Hands Like Clouds" },
   { number: 10, name: "Single Whip" },
   { number: 11, name: "High Pat on Horse" },
@@ -1566,15 +1565,27 @@ const YANG24_MOVES = [
   { number: 24, name: "Closing Form" },
 ] as const;
 
-function getYang24Move(moveNumber: number | null | undefined) {
+function normalizeChinaMove(moveNumber: number | null | undefined) {
   if (!moveNumber) return null;
-  return YANG24_MOVES.find((move) => move.number === moveNumber) ?? null;
+  if (moveNumber === 8) return 7;
+  return moveNumber;
+}
+
+function formatChinaMove(moveNumber: number | null | undefined) {
+  if (!moveNumber) return "";
+  return moveNumber === 7 ? "7-8" : String(moveNumber);
+}
+
+function getYang24Move(moveNumber: number | null | undefined) {
+  const normalized = normalizeChinaMove(moveNumber);
+  if (!normalized) return null;
+  return YANG24_MOVES.find((move) => move.number === normalized) ?? null;
 }
 
 function getYang24MoveUrl(moveNumber: number | null | undefined) {
   const move = getYang24Move(moveNumber);
   if (!move) return null;
-  // Video IDs from the Yang 24 playlist, one per move (moves 1–23).
+  // Video IDs from the Yang 24 playlist, one per practice step.
   // The original array had an extra intro video (9M35HX110Ek) at the start
   // that shifted every mapping by -1. Move 24 video is not yet available.
   const yang24VideoIds = [
@@ -1584,8 +1595,7 @@ function getYang24MoveUrl(moveNumber: number | null | undefined) {
     "Fr6GBPoEKFc",  // move 4
     "XOkDfwACQJI",  // move 5
     "MLiAZ0sInNk",  // move 6
-    "gxv5bYlv-iY",  // move 7
-    "u-s-fxeH9TE",  // move 8
+    "gxv5bYlv-iY",  // move 7-8
     "ALyToJAzRQA",  // move 9
     "vRqIqINdwsc",  // move 10
     "B8MaOkcX5E8",  // move 11
@@ -1602,7 +1612,8 @@ function getYang24MoveUrl(moveNumber: number | null | undefined) {
     "5bTCUDWCS7g",  // move 22
     "rs7Lrmlmquk",  // move 23
   ] as const;
-  const videoId = yang24VideoIds[move.number - 1];
+  const videoIndex = move.number <= 7 ? move.number - 1 : move.number - 2;
+  const videoId = yang24VideoIds[videoIndex];
   return videoId ? `https://www.youtube.com/watch?v=${videoId}` : null;
 }
 
@@ -1627,7 +1638,10 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
   const todayStr = formatDateLocal(now);
 
   // Compute stats
-  const currentMove = entries.reduce((max, e) => e.move_learned && e.move_learned > max ? e.move_learned : max, 0);
+  const currentMove = entries.reduce((max, e) => {
+    const normalized = normalizeChinaMove(e.move_learned);
+    return normalized && normalized > max ? normalized : max;
+  }, 0);
   const fullRuns = entries.filter((e) => e.full_run).length;
   const practiceDays = entries.length;
 
@@ -1665,10 +1679,10 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
     const existing = entryByDate.get(day);
     setSelectedDay(day);
     if (existing) {
-      setMoveInput(existing.move_learned ? String(existing.move_learned) : "");
+      setMoveInput(String(normalizeChinaMove(existing.move_learned) ?? ""));
       setFullRunInput(existing.full_run || false);
     } else {
-      setMoveInput(currentMove < 24 ? String(currentMove + 1) : "");
+      setMoveInput(currentMove < 23 ? String(currentMove + 1) : "");
       setFullRunInput(false);
     }
   }
@@ -1682,8 +1696,9 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
     setSaving(true);
     const payload: { date: string; move_learned?: number; full_run?: boolean } = { date: selectedDay };
     const mv = parseInt(moveInput, 10);
-    if (!isNaN(mv) && mv > 0 && mv <= 24 && mv <= currentMove + 1) {
-      payload.move_learned = mv;
+    const normalized = normalizeChinaMove(isNaN(mv) ? null : mv);
+    if (normalized && normalized > 0 && normalized <= 23 && normalized <= currentMove + 1) {
+      payload.move_learned = normalized;
     }
     payload.full_run = fullRunInput;
     await onSave(payload);
@@ -1706,7 +1721,7 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
         <div className="flex items-center justify-between mb-3">
           <div>
             <div className="text-2xl md:text-3xl font-semibold tracking-tight">
-              Move <span className="text-amber-400">{currentMove}</span> of 24
+              Move <span className="text-amber-400">{currentMove}</span> of 23
             </div>
             <div className="text-xs text-[var(--text-muted)] mt-0.5 uppercase tracking-wider">
               Yang 24 Form
@@ -1733,11 +1748,11 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
         <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
           <div
             className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${(currentMove / 24) * 100}%`, background: "#f59e0b" }}
+            style={{ width: `${(currentMove / 23) * 100}%`, background: "#f59e0b" }}
           />
         </div>
         <div className="text-[10px] text-[var(--text-muted)] mt-1.5 text-right">
-          {currentMove}/24 moves
+          {currentMove}/23 moves
         </div>
       </div>
 
@@ -1746,7 +1761,7 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
         {[
           { label: "Days left", value: daysRemaining },
           { label: "Days practiced", value: practiceDays },
-          { label: "Current move", value: `${currentMove}/24` },
+          { label: "Current move", value: `${currentMove}/23` },
           { label: "Full runs", value: fullRuns },
         ].map((stat) => (
           <div
@@ -1823,7 +1838,7 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
                   </span>
                   {entry?.move_learned && (
                     <span className="text-amber-400 font-semibold text-[11px] leading-none">
-                      {entry.move_learned}
+                      {formatChinaMove(entry.move_learned)}
                     </span>
                   )}
                   {entry?.full_run && (
@@ -1860,7 +1875,7 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
                 <input
                   type="number"
                   min={1}
-                  max={Math.min(24, currentMove + 1)}
+                  max={Math.min(23, currentMove + 1)}
                   value={moveInput}
                   onChange={(e) => setMoveInput(e.target.value)}
                   className="w-14 rounded-lg px-2 py-1 text-center text-sm font-mono tabular-nums"
