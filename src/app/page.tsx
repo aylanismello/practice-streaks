@@ -1565,20 +1565,20 @@ const YANG24_MOVES = [
   { number: 24, name: "Closing Form" },
 ] as const;
 
-function normalizeChinaMove(moveNumber: number | null | undefined) {
+function getChinaProgressMove(moveNumber: number | null | undefined) {
   if (!moveNumber) return null;
-  if (moveNumber === 8) return 7;
+  if (moveNumber === 7 || moveNumber === 8) return 8;
   return moveNumber;
 }
 
 function formatChinaMove(moveNumber: number | null | undefined) {
   if (!moveNumber) return "";
-  return moveNumber === 7 ? "7-8" : String(moveNumber);
+  return moveNumber === 7 || moveNumber === 8 ? "7-8" : String(moveNumber);
 }
 
 function getYang24Move(moveNumber: number | null | undefined) {
-  const normalized = normalizeChinaMove(moveNumber);
-  if (!normalized) return null;
+  if (!moveNumber) return null;
+  const normalized = moveNumber === 7 || moveNumber === 8 ? 7 : moveNumber;
   return YANG24_MOVES.find((move) => move.number === normalized) ?? null;
 }
 
@@ -1639,8 +1639,8 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
 
   // Compute stats
   const currentMove = entries.reduce((max, e) => {
-    const normalized = normalizeChinaMove(e.move_learned);
-    return normalized && normalized > max ? normalized : max;
+    const progressMove = getChinaProgressMove(e.move_learned);
+    return progressMove && progressMove > max ? progressMove : max;
   }, 0);
   const fullRuns = entries.filter((e) => e.full_run).length;
   const practiceDays = entries.length;
@@ -1679,7 +1679,7 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
     const existing = entryByDate.get(day);
     setSelectedDay(day);
     if (existing) {
-      setMoveInput(String(normalizeChinaMove(existing.move_learned) ?? ""));
+      setMoveInput(String(existing.move_learned ?? ""));
       setFullRunInput(existing.full_run || false);
     } else {
       setMoveInput(currentMove < 23 ? String(currentMove + 1) : "");
@@ -1696,9 +1696,9 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
     setSaving(true);
     const payload: { date: string; move_learned?: number; full_run?: boolean } = { date: selectedDay };
     const mv = parseInt(moveInput, 10);
-    const normalized = normalizeChinaMove(isNaN(mv) ? null : mv);
-    if (normalized && normalized > 0 && normalized <= 23 && normalized <= currentMove + 1) {
-      payload.move_learned = normalized;
+    const move = isNaN(mv) ? null : mv;
+    if (move && move > 0 && move <= 23 && move <= currentMove + 1) {
+      payload.move_learned = move;
     }
     payload.full_run = fullRunInput;
     await onSave(payload);
