@@ -47,5 +47,5 @@ export function mapLegacyWotLevel(level: string): WotLevel {
 }
 
 export function effectiveWotLevel(row: { color: string; legacy_color?: string | null }): WotLevel {
-  return normalizeWotLevel(row.legacy_color ?? row.color) ?? mapLegacyWotLevel(row.color);
+  return normalizeWotLevel(row.color) ?? normalizeWotLevel(row.legacy_color) ?? mapLegacyWotLevel(row.color);
 }
