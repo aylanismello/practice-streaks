@@ -4,6 +4,7 @@ export type WotLevel = (typeof WOT_LEVELS)[number];
 export const WOT_LEVEL_ALIASES: Record<string, WotLevel> = {
   green: "green",
   "yellow-green": "yellow_green",
+  "4/5": "yellow_green",
   yellow_green: "yellow_green",
   solid: "yellow_green",
   yellow: "yellow",
