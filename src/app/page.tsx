@@ -1546,7 +1546,8 @@ const YANG24_MOVES = [
   { number: 4, name: "Brush Knee and Push" },
   { number: 5, name: "Play the Lute" },
   { number: 6, name: "Step Back and Repulse Monkey" },
-  { number: 7, name: "Grasp the Sparrow's Tail / Single Whip" },
+  { number: 7, name: "Grasp the Sparrow's Tail" },
+  { number: 8, name: "Single Whip" },
   { number: 9, name: "Wave Hands Like Clouds" },
   { number: 10, name: "Single Whip" },
   { number: 11, name: "High Pat on Horse" },
@@ -1578,16 +1579,15 @@ function formatChinaMove(moveNumber: number | null | undefined) {
 
 function getYang24Move(moveNumber: number | null | undefined) {
   if (!moveNumber) return null;
-  const normalized = moveNumber === 7 || moveNumber === 8 ? 7 : moveNumber;
-  return YANG24_MOVES.find((move) => move.number === normalized) ?? null;
+  return YANG24_MOVES.find((move) => move.number === moveNumber) ?? null;
 }
 
 function getYang24MoveUrl(moveNumber: number | null | undefined) {
   const move = getYang24Move(moveNumber);
   if (!move) return null;
-  // Video IDs from the Yang 24 playlist, one per practice step.
-  // The original array had an extra intro video (9M35HX110Ek) at the start
-  // that shifted every mapping by -1. Move 24 video is not yet available.
+  // Video IDs from the Yang 24 playlist, one per move (moves 1-23).
+  // Tracking semantics combine 7 and 8 for progress, but the helper links
+  // must stay aligned to the actual move videos in the playlist.
   const yang24VideoIds = [
     "BYkm7iV3VRE",  // move 1
     "heZU2hE5ldM",  // move 2
@@ -1595,7 +1595,8 @@ function getYang24MoveUrl(moveNumber: number | null | undefined) {
     "Fr6GBPoEKFc",  // move 4
     "XOkDfwACQJI",  // move 5
     "MLiAZ0sInNk",  // move 6
-    "gxv5bYlv-iY",  // move 7-8
+    "gxv5bYlv-iY",  // move 7
+    "u-s-fxeH9TE",  // move 8
     "ALyToJAzRQA",  // move 9
     "vRqIqINdwsc",  // move 10
     "B8MaOkcX5E8",  // move 11
@@ -1612,8 +1613,7 @@ function getYang24MoveUrl(moveNumber: number | null | undefined) {
     "5bTCUDWCS7g",  // move 22
     "rs7Lrmlmquk",  // move 23
   ] as const;
-  const videoIndex = move.number <= 7 ? move.number - 1 : move.number - 2;
-  const videoId = yang24VideoIds[videoIndex];
+  const videoId = yang24VideoIds[move.number - 1];
   return videoId ? `https://www.youtube.com/watch?v=${videoId}` : null;
 }
 
