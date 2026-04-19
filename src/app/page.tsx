@@ -1631,11 +1631,27 @@ function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entri
   const [fullRunInput, setFullRunInput] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [editingMove, setEditingMove] = useState<number | null>(null);
-  const [linkDraft, setLinkDraft] = useState("");
+  const [linkInput, setLinkInput] = useState("");
+  const [linkSaving, setLinkSaving] = useState(false);
 
-  const selectedMove = getYang24Move(moveInput ? parseInt(moveInput, 10) : null);
-  const selectedMoveUrl = getYang24MoveUrl(moveInput ? parseInt(moveInput, 10) : null);
+  const parsedMoveNumber = moveInput ? parseInt(moveInput, 10) : null;
+  const validMoveNumber = parsedMoveNumber && !isNaN(parsedMoveNumber) ? parsedMoveNumber : null;
+  const selectedMove = getYang24Move(validMoveNumber);
+  const selectedMoveUrl = getYang24MoveUrl(validMoveNumber);
+  const savedLinkUrl = validMoveNumber
+    ? links.find((link) => link.move_number === validMoveNumber)?.youtube_url ?? null
+    : null;
+  const normalizedLinkDraft = normalizeYouTubeUrl(linkInput);
+  const linkHasChanges = (normalizedLinkDraft || null) !== (savedLinkUrl || null);
+  const openSavedUrl = savedLinkUrl
+    ? (savedLinkUrl.startsWith("http") ? savedLinkUrl : `https://${savedLinkUrl}`)
+    : null;
+
+  // Sync link input with the saved link for the currently selected move
+  useEffect(() => {
+    if (!selectedDay) return;
+    setLinkInput(savedLinkUrl ?? "");
+  }, [selectedDay, validMoveNumber, savedLinkUrl]);
 
   // Single-month navigation: 0 = April, 1 = May
   const now = new Date();
@@ -1724,6 +1740,13 @@ function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entri
     setSelectedDay(null);
   }
 
+  async function handleSaveLink() {
+    if (!validMoveNumber) return;
+    setLinkSaving(true);
+    await onSaveLink(validMoveNumber, normalizedLinkDraft || null);
+    setLinkSaving(false);
+  }
+
   return (
     <div className="animate-fade-in">
       {/* Progress Header */}
@@ -1783,61 +1806,6 @@ function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entri
             <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{stat.label}</div>
           </div>
         ))}
-      </div>
-
-      <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 md:p-5">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">Manual YouTube links</div>
-          <div className="text-xs text-[var(--text-muted)]">Edit, save, and open per move.</div>
-        </div>
-        <div className="grid gap-2">
-          {YANG24_MOVES.map((move) => {
-            const row = links.find((link) => link.move_number === move.number) ?? null;
-            const isEditing = editingMove === move.number;
-            const openUrl = row?.youtube_url ? (row.youtube_url.startsWith("http") ? row.youtube_url : `https://${row.youtube_url}`) : null;
-            return (
-              <div key={move.number} className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium">{move.number}. {move.name}</div>
-                  <div className="text-xs text-[var(--text-muted)] truncate">{row?.youtube_url ? getMoveUrlLabel(row.youtube_url) : "No link yet"}</div>
-                </div>
-                <input
-                  readOnly={!isEditing}
-                  value={isEditing ? linkDraft : (row?.youtube_url ?? "")}
-                  onChange={(e) => setLinkDraft(e.target.value)}
-                  placeholder={`Paste link for ${move.number}`}
-                  className="min-w-0 w-[260px] rounded-md border px-2 py-1 text-xs bg-transparent outline-none"
-                  style={{ borderColor: "var(--border)", color: "var(--text)", opacity: isEditing ? 1 : 0.65 }}
-                />
-                <button
-                  onClick={async () => {
-                    if (isEditing) {
-                      await onSaveLink(move.number, normalizeYouTubeUrl(linkDraft) || null);
-                      setEditingMove(null);
-                    } else {
-                      setEditingMove(move.number);
-                      setLinkDraft(row?.youtube_url ?? "");
-                    }
-                  }}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border"
-                  style={{ borderColor: "var(--border)", background: "var(--bg)", color: "var(--text-muted)" }}
-                  title={isEditing ? "Save link" : "Edit link"}
-                >
-                  ✎
-                </button>
-                <button
-                  disabled={!openUrl}
-                  onClick={() => openUrl && window.open(openUrl, "_blank", "noopener,noreferrer")}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-30"
-                  style={{ borderColor: "var(--border)", background: "var(--bg)", color: "var(--text-muted)" }}
-                  title="Open saved link"
-                >
-                  ↗
-                </button>
-              </div>
-            );
-          })}
-        </div>
       </div>
 
       {/* Single Month Calendar */}
@@ -1964,6 +1932,44 @@ function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entri
                   </a>
                 )}
               </label>
+              {selectedMove && (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase tracking-wider text-[var(--text-muted)]">YouTube link</span>
+                    <span className="text-[11px] text-[var(--text-muted)] truncate max-w-[60%]">
+                      {savedLinkUrl ? getMoveUrlLabel(savedLinkUrl) : "No link yet"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      value={linkInput}
+                      onChange={(e) => setLinkInput(e.target.value)}
+                      placeholder={`Paste link for move ${selectedMove.number}`}
+                      className="flex-1 min-w-0 rounded-md border px-2 py-1 text-xs bg-transparent outline-none"
+                      style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                    />
+                    <button
+                      onClick={handleSaveLink}
+                      disabled={linkSaving || !linkHasChanges}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-30"
+                      style={{ borderColor: "var(--border)", background: "var(--bg)", color: "var(--text-muted)" }}
+                      title={linkSaving ? "Saving link..." : "Save link"}
+                    >
+                      ✎
+                    </button>
+                    <button
+                      disabled={!openSavedUrl}
+                      onClick={() => openSavedUrl && window.open(openSavedUrl, "_blank", "noopener,noreferrer")}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-30"
+                      style={{ borderColor: "var(--border)", background: "var(--bg)", color: "var(--text-muted)" }}
+                      title="Open saved link"
+                    >
+                      ↗
+                    </button>
+                  </div>
+                </div>
+              )}
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <button
                   onClick={() => setFullRunInput(!fullRunInput)}
