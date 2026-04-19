@@ -1537,6 +1537,7 @@ interface ChinaPrepEntry {
   move_learned: number | null;
   full_run: boolean;
   notes: string | null;
+  youtube_url?: string | null;
 }
 
 interface ChinaMoveLink {
@@ -1625,7 +1626,7 @@ function getMoveUrlLabel(url: string) {
   }
 }
 
-function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entries: ChinaPrepEntry[]; links: ChinaMoveLink[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean }) => void; onDelete: (date: string) => Promise<void>; onSaveLink: (moveNumber: number, youtubeUrl: string | null) => Promise<void> }) {
+function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean; youtube_url?: string | null }) => void; onDelete: (date: string) => Promise<void>; }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [moveInput, setMoveInput] = useState("");
   const [fullRunInput, setFullRunInput] = useState(false);
@@ -1638,16 +1639,15 @@ function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entri
   const validMoveNumber = parsedMoveNumber && !isNaN(parsedMoveNumber) ? parsedMoveNumber : null;
   const selectedMove = getYang24Move(validMoveNumber);
   const selectedMoveUrl = getYang24MoveUrl(validMoveNumber);
-  const savedLinkUrl = validMoveNumber
-    ? links.find((link) => link.move_number === validMoveNumber)?.youtube_url ?? null
-    : null;
+  const selectedEntry = selectedDay ? entries.find((entry) => entry.date === selectedDay) ?? null : null;
+  const savedLinkUrl = selectedEntry?.youtube_url ?? null;
   const normalizedLinkDraft = normalizeYouTubeUrl(linkInput);
   const linkHasChanges = (normalizedLinkDraft || null) !== (savedLinkUrl || null);
   const openSavedUrl = savedLinkUrl
     ? (savedLinkUrl.startsWith("http") ? savedLinkUrl : `https://${savedLinkUrl}`)
     : null;
 
-  // Sync link input with the saved link for the currently selected move
+  // Sync link input with the saved link for the currently selected day
   useEffect(() => {
     if (!selectedDay) return;
     setLinkInput(savedLinkUrl ?? "");
@@ -1720,17 +1720,15 @@ function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entri
   async function handleSave() {
     if (!selectedDay) return;
     setSaving(true);
-    const payload: { date: string; move_learned?: number; full_run?: boolean } = { date: selectedDay };
+    const payload: { date: string; move_learned?: number; full_run?: boolean; youtube_url?: string | null } = { date: selectedDay };
     const mv = parseInt(moveInput, 10);
     const move = isNaN(mv) ? null : mv;
     if (move && move > 0 && move <= 23 && move <= currentMove + 1) {
       payload.move_learned = move;
     }
     payload.full_run = fullRunInput;
+    if (linkInput.trim()) payload.youtube_url = normalizedLinkDraft || null;
     await onSave(payload);
-    if (move && move > 0 && move <= 24) {
-      await onSaveLink(move, normalizedLinkDraft || null);
-    }
     setSaving(false);
     setSelectedDay(null);
   }
@@ -1744,9 +1742,9 @@ function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entri
   }
 
   async function handleSaveLink() {
-    if (!validMoveNumber) return;
+    if (!selectedDay) return;
     setLinkSaving(true);
-    await onSaveLink(validMoveNumber, normalizedLinkDraft || null);
+    await onSave({ date: selectedDay, youtube_url: normalizedLinkDraft || null });
     setLinkSaving(false);
   }
 
@@ -2030,7 +2028,6 @@ export default function Dashboard() {
   const [focusmateData, setFocusmateData] = useState<FocusmateData | null>(null);
   const [chinaMode, setChinaMode] = useState(false);
   const [chinaEntries, setChinaEntries] = useState<ChinaPrepEntry[]>([]);
-  const [chinaMoveLinks, setChinaMoveLinks] = useState<ChinaMoveLink[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [flowOpen, setFlowOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -2115,30 +2112,15 @@ export default function Dashboard() {
 
   const fetchChinaData = useCallback(async () => {
     try {
-      const [entriesRes, linksRes] = await Promise.all([fetch("/api/china"), fetch("/api/china-move-links")]);
+      const entriesRes = await fetch("/api/china");
       if (entriesRes.ok) {
         const data = await entriesRes.json();
         setChinaEntries(data);
       }
-      if (linksRes.ok) {
-        const data = await linksRes.json();
-        setChinaMoveLinks(data);
-      }
     } catch { /* ignore */ }
   }, []);
 
-  const handleChinaSaveLink = useCallback(async (moveNumber: number, youtubeUrl: string | null) => {
-    try {
-      const res = await fetch("/api/china-move-links", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ move_number: moveNumber, youtube_url: youtubeUrl }),
-      });
-      if (res.ok) await fetchChinaData();
-    } catch { /* ignore */ }
-  }, [fetchChinaData]);
-
-  const handleChinaSave = useCallback(async (entry: { date: string; move_learned?: number; full_run?: boolean }) => {
+  const handleChinaSave = useCallback(async (entry: { date: string; move_learned?: number; full_run?: boolean; youtube_url?: string | null }) => {
     try {
       const res = await fetch("/api/china", {
         method: "POST",
@@ -2534,7 +2516,7 @@ export default function Dashboard() {
       </div>
 
       {chinaMode ? (
-        <ChinaPrepView entries={chinaEntries} links={chinaMoveLinks} onSave={handleChinaSave} onDelete={handleChinaDelete} onSaveLink={handleChinaSaveLink} />
+        <ChinaPrepView entries={chinaEntries} onSave={handleChinaSave} onDelete={handleChinaDelete} />
       ) : (<>
 
       {/* Tonight card — only after 9 PM */}

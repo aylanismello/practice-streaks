@@ -7,7 +7,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("china_prep")
-      .select("date, move_learned, full_run, notes")
+      .select("date, move_learned, full_run, notes, youtube_url")
       .order("date", { ascending: true });
 
     if (error) {
@@ -22,7 +22,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { date, move_learned, full_run, notes } = await req.json();
+    const { date, move_learned, full_run, notes, youtube_url } = await req.json();
 
     if (!date) {
       return NextResponse.json(
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
     if (move_learned !== undefined) row.move_learned = move_learned;
     if (full_run !== undefined) row.full_run = full_run;
     if (notes !== undefined) row.notes = notes;
+    if (youtube_url !== undefined) row.youtube_url = youtube_url?.trim() ? String(youtube_url).trim() : null;
 
     const supabase = createServiceClient();
 
