@@ -1585,35 +1585,34 @@ function getYang24Move(moveNumber: number | null | undefined) {
 function getYang24MoveUrl(moveNumber: number | null | undefined) {
   const move = getYang24Move(moveNumber);
   if (!move) return null;
-  // Video IDs from the Yang 24 playlist, one per move (moves 1-23).
-  // Tracking semantics combine 7 and 8 for progress, but the helper links
-  // must stay aligned to the actual move videos in the playlist.
+  // Video IDs from the Yang 24 playlist, one per actual video (23 total).
+  // Move 7 covers moves 7-8, so move 8 and everything after it shift back one slot.
   const yang24VideoIds = [
-    "BYkm7iV3VRE",  // move 1
-    "heZU2hE5ldM",  // move 2
-    "Z_ofRexZT40",  // move 3
-    "Fr6GBPoEKFc",  // move 4
-    "XOkDfwACQJI",  // move 5
-    "MLiAZ0sInNk",  // move 6
-    "gxv5bYlv-iY",  // move 7
-    "u-s-fxeH9TE",  // move 8
-    "ALyToJAzRQA",  // move 9
-    "vRqIqINdwsc",  // move 10
-    "B8MaOkcX5E8",  // move 11
-    "Wi4zejBNwS0",  // move 12
-    "POciAjxs2kI",  // move 13
-    "mhNN-spKJWc",  // move 14
-    "B8KpmFcSUkM",  // move 15
-    "-fbDZsxVVDw",  // move 16
-    "Yzk66OmdgzY",  // move 17
-    "cb0ckwRr_7g",  // move 18
-    "nrRLBrY4HLg",  // move 19
-    "UD0ENS_Qxfc",  // move 20
-    "NbHQprFpvPQ",  // move 21
-    "5bTCUDWCS7g",  // move 22
-    "rs7Lrmlmquk",  // move 23
+    "BYkm7iV3VRE",  // video 1, move 1
+    "heZU2hE5ldM",  // video 2, move 2
+    "Z_ofRexZT40",  // video 3, move 3
+    "Fr6GBPoEKFc",  // video 4, move 4
+    "XOkDfwACQJI",  // video 5, move 5
+    "MLiAZ0sInNk",  // video 6, move 6
+    "gxv5bYlv-iY",  // video 7, moves 7-8
+    "ALyToJAzRQA",  // video 8, move 9
+    "vRqIqINdwsc",  // video 9, move 10
+    "B8MaOkcX5E8",  // video 10, move 11
+    "Wi4zejBNwS0",  // video 11, move 12
+    "POciAjxs2kI",  // video 12, move 13
+    "mhNN-spKJWc",  // video 13, move 14
+    "B8KpmFcSUkM",  // video 14, move 15
+    "-fbDZsxVVDw",  // video 15, move 16
+    "Yzk66OmdgzY",  // video 16, move 17
+    "cb0ckwRr_7g",  // video 17, move 18
+    "nrRLBrY4HLg",  // video 18, move 19
+    "UD0ENS_Qxfc",  // video 19, move 20
+    "NbHQprFpvPQ",  // video 20, move 21
+    "5bTCUDWCS7g",  // video 21, move 22
+    "rs7Lrmlmquk",  // video 22, move 23
   ] as const;
-  const videoId = yang24VideoIds[move.number - 1];
+  const videoIndex = move.number <= 7 ? move.number - 1 : move.number - 2;
+  const videoId = yang24VideoIds[videoIndex];
   return videoId ? `https://www.youtube.com/watch?v=${videoId}` : null;
 }
 
