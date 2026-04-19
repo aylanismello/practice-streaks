@@ -94,3 +94,8 @@ export function getRangeLabel(
   const fmtLast = last.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `${fmtFirst} – ${fmtLast}`;
 }
+
+export function getMondayStartPadding(dateStr: string): number {
+  const d = new Date(dateStr + "T12:00:00");
+  return (d.getDay() + 6) % 7;
+}

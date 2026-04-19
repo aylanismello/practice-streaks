@@ -1539,6 +1539,11 @@ interface ChinaPrepEntry {
   notes: string | null;
 }
 
+interface ChinaMoveLink {
+  move_number: number;
+  youtube_url: string | null;
+}
+
 const YANG24_MOVES = [
   { number: 1, name: "Commencement" },
   { number: 2, name: "Part the Wild Horse's Mane" },
@@ -1593,12 +1598,41 @@ function getYang24MoveUrl(moveNumber: number | null | undefined) {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
-function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean }) => void; onDelete: (date: string) => Promise<void> }) {
+function normalizeYouTubeUrl(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname.includes("youtube.com") || url.hostname.includes("youtu.be")) return url.toString();
+  } catch {
+    return trimmed;
+  }
+  return trimmed;
+}
+
+function getMondayStartPadding(dateStr: string): number {
+  const d = new Date(dateStr + "T12:00:00");
+  return (d.getDay() + 6) % 7;
+}
+
+function getMoveUrlLabel(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes("youtu.be")) return parsed.pathname.replace("/", "") || parsed.hostname;
+    return parsed.hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entries: ChinaPrepEntry[]; links: ChinaMoveLink[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean }) => void; onDelete: (date: string) => Promise<void>; onSaveLink: (moveNumber: number, youtubeUrl: string | null) => Promise<void> }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [moveInput, setMoveInput] = useState("");
   const [fullRunInput, setFullRunInput] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editingMove, setEditingMove] = useState<number | null>(null);
+  const [linkDraft, setLinkDraft] = useState("");
 
   const selectedMove = getYang24Move(moveInput ? parseInt(moveInput, 10) : null);
   const selectedMoveUrl = getYang24MoveUrl(moveInput ? parseInt(moveInput, 10) : null);
@@ -1635,7 +1669,7 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
 
   function buildMonthDays(year: number, month: number): (string | null)[] {
     const firstOfMonth = new Date(year, month, 1);
-    const startDow = firstOfMonth.getDay();
+    const startDow = getMondayStartPadding(`${year}-${String(month + 1).padStart(2, "0")}-01`);
     const cells: (string | null)[] = [];
     for (let i = 0; i < startDow; i++) cells.push(null);
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1751,6 +1785,61 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
         ))}
       </div>
 
+      <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 md:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">Manual YouTube links</div>
+          <div className="text-xs text-[var(--text-muted)]">Edit, save, and open per move.</div>
+        </div>
+        <div className="grid gap-2">
+          {YANG24_MOVES.map((move) => {
+            const row = links.find((link) => link.move_number === move.number) ?? null;
+            const isEditing = editingMove === move.number;
+            const openUrl = row?.youtube_url ? (row.youtube_url.startsWith("http") ? row.youtube_url : `https://${row.youtube_url}`) : null;
+            return (
+              <div key={move.number} className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium">{move.number}. {move.name}</div>
+                  <div className="text-xs text-[var(--text-muted)] truncate">{row?.youtube_url ? getMoveUrlLabel(row.youtube_url) : "No link yet"}</div>
+                </div>
+                <input
+                  readOnly={!isEditing}
+                  value={isEditing ? linkDraft : (row?.youtube_url ?? "")}
+                  onChange={(e) => setLinkDraft(e.target.value)}
+                  placeholder={`Paste link for ${move.number}`}
+                  className="min-w-0 w-[260px] rounded-md border px-2 py-1 text-xs bg-transparent outline-none"
+                  style={{ borderColor: "var(--border)", color: "var(--text)", opacity: isEditing ? 1 : 0.65 }}
+                />
+                <button
+                  onClick={async () => {
+                    if (isEditing) {
+                      await onSaveLink(move.number, normalizeYouTubeUrl(linkDraft) || null);
+                      setEditingMove(null);
+                    } else {
+                      setEditingMove(move.number);
+                      setLinkDraft(row?.youtube_url ?? "");
+                    }
+                  }}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border"
+                  style={{ borderColor: "var(--border)", background: "var(--bg)", color: "var(--text-muted)" }}
+                  title={isEditing ? "Save link" : "Edit link"}
+                >
+                  ✎
+                </button>
+                <button
+                  disabled={!openUrl}
+                  onClick={() => openUrl && window.open(openUrl, "_blank", "noopener,noreferrer")}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-30"
+                  style={{ borderColor: "var(--border)", background: "var(--bg)", color: "var(--text-muted)" }}
+                  title="Open saved link"
+                >
+                  ↗
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Single Month Calendar */}
       <div className="mb-4">
         <div className="flex items-center gap-2 text-xs uppercase tracking-wider mb-2">
@@ -1775,7 +1864,7 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
         <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-3 md:p-4">
           {/* Day headers */}
           <div className="grid grid-cols-7 gap-1 mb-1">
-            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+            {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
               <div key={i} className="text-center text-[10px] text-[var(--text-muted)] pb-1">{d}</div>
             ))}
           </div>
@@ -1941,6 +2030,7 @@ export default function Dashboard() {
   const [focusmateData, setFocusmateData] = useState<FocusmateData | null>(null);
   const [chinaMode, setChinaMode] = useState(false);
   const [chinaEntries, setChinaEntries] = useState<ChinaPrepEntry[]>([]);
+  const [chinaMoveLinks, setChinaMoveLinks] = useState<ChinaMoveLink[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [flowOpen, setFlowOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -2025,13 +2115,28 @@ export default function Dashboard() {
 
   const fetchChinaData = useCallback(async () => {
     try {
-      const res = await fetch("/api/china");
-      if (res.ok) {
-        const data = await res.json();
+      const [entriesRes, linksRes] = await Promise.all([fetch("/api/china"), fetch("/api/china-move-links")]);
+      if (entriesRes.ok) {
+        const data = await entriesRes.json();
         setChinaEntries(data);
+      }
+      if (linksRes.ok) {
+        const data = await linksRes.json();
+        setChinaMoveLinks(data);
       }
     } catch { /* ignore */ }
   }, []);
+
+  const handleChinaSaveLink = useCallback(async (moveNumber: number, youtubeUrl: string | null) => {
+    try {
+      const res = await fetch("/api/china-move-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ move_number: moveNumber, youtube_url: youtubeUrl }),
+      });
+      if (res.ok) await fetchChinaData();
+    } catch { /* ignore */ }
+  }, [fetchChinaData]);
 
   const handleChinaSave = useCallback(async (entry: { date: string; move_learned?: number; full_run?: boolean }) => {
     try {
@@ -2429,7 +2534,7 @@ export default function Dashboard() {
       </div>
 
       {chinaMode ? (
-        <ChinaPrepView entries={chinaEntries} onSave={handleChinaSave} onDelete={handleChinaDelete} />
+        <ChinaPrepView entries={chinaEntries} links={chinaMoveLinks} onSave={handleChinaSave} onDelete={handleChinaDelete} onSaveLink={handleChinaSaveLink} />
       ) : (<>
 
       {/* Tonight card — only after 9 PM */}
