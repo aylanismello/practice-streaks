@@ -1715,11 +1715,8 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
       payload.move_learned = move;
     }
     payload.full_run = fullRunInput;
-    if (linkInput.trim()) payload.youtube_url = normalizedLinkDraft || null;
+    payload.youtube_url = normalizedLinkDraft || null;
     await onSave(payload);
-    if (move && move > 0 && move <= 24) {
-      await onSaveLink(move, normalizedLinkDraft || null);
-    }
     setSaving(false);
     setSelectedDay(null);
   }
