@@ -5,10 +5,19 @@ export async function GET() {
   try {
     const supabase = createServiceClient();
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("china_prep")
       .select("date, move_learned, full_run, notes, youtube_url")
       .order("date", { ascending: true });
+
+    if (error?.message?.includes("youtube_url")) {
+      const fallback = await supabase
+        .from("china_prep")
+        .select("date, move_learned, full_run, notes")
+        .order("date", { ascending: true });
+      data = (fallback.data ?? []).map((row) => ({ ...row, youtube_url: null }));
+      error = fallback.error;
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -31,19 +40,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const row: Record<string, unknown> = { date };
-    if (move_learned !== undefined) row.move_learned = move_learned;
-    if (full_run !== undefined) row.full_run = full_run;
-    if (notes !== undefined) row.notes = notes;
-    if (youtube_url !== undefined) row.youtube_url = youtube_url?.trim() ? String(youtube_url).trim() : null;
+    const baseRow: Record<string, unknown> = { date };
+    if (move_learned !== undefined) baseRow.move_learned = move_learned;
+    if (full_run !== undefined) baseRow.full_run = full_run;
+    if (notes !== undefined) baseRow.notes = notes;
 
     const supabase = createServiceClient();
 
-    const { data, error } = await supabase
+    const withYoutube = {
+      ...baseRow,
+      ...(youtube_url !== undefined ? { youtube_url: youtube_url?.trim() ? String(youtube_url).trim() : null } : {}),
+    };
+
+    let { data, error } = await supabase
       .from("china_prep")
-      .upsert(row, { onConflict: "date" })
+      .upsert(withYoutube, { onConflict: "date" })
       .select()
       .single();
+
+    if (error?.message?.includes("youtube_url")) {
+      const fallback = await supabase
+        .from("china_prep")
+        .upsert(baseRow, { onConflict: "date" })
+        .select()
+        .single();
+      data = fallback.data ? { ...fallback.data, youtube_url: null } : null;
+      error = fallback.error;
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
