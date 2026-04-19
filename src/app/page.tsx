@@ -1728,6 +1728,9 @@ function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entri
     }
     payload.full_run = fullRunInput;
     await onSave(payload);
+    if (move && move > 0 && move <= 24) {
+      await onSaveLink(move, normalizedLinkDraft || null);
+    }
     setSaving(false);
     setSelectedDay(null);
   }
@@ -1949,15 +1952,6 @@ function ChinaPrepView({ entries, links, onSave, onDelete, onSaveLink }: { entri
                       className="flex-1 min-w-0 rounded-md border px-2 py-1 text-xs bg-transparent outline-none"
                       style={{ borderColor: "var(--border)", color: "var(--text)" }}
                     />
-                    <button
-                      onClick={handleSaveLink}
-                      disabled={linkSaving || !linkHasChanges}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-30"
-                      style={{ borderColor: "var(--border)", background: "var(--bg)", color: "var(--text-muted)" }}
-                      title={linkSaving ? "Saving link..." : "Save link"}
-                    >
-                      ✎
-                    </button>
                     <button
                       disabled={!openSavedUrl}
                       onClick={() => openSavedUrl && window.open(openSavedUrl, "_blank", "noopener,noreferrer")}
