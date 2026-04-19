@@ -1588,17 +1588,6 @@ function getYang24Move(moveNumber: number | null | undefined) {
   return YANG24_MOVES.find((move) => move.number === moveNumber) ?? null;
 }
 
-function getYang24MoveUrl(moveNumber: number | null | undefined) {
-  const move = getYang24Move(moveNumber);
-  if (!move) return null;
-
-  const query = move.number === 8
-    ? "Yang 24 move 7 8 Single Whip"
-    : `Yang 24 move ${move.number} ${move.name}`;
-
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-}
-
 function normalizeYouTubeUrl(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return "";
@@ -1638,7 +1627,6 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
   const parsedMoveNumber = moveInput ? parseInt(moveInput, 10) : null;
   const validMoveNumber = parsedMoveNumber && !isNaN(parsedMoveNumber) ? parsedMoveNumber : null;
   const selectedMove = getYang24Move(validMoveNumber);
-  const selectedMoveUrl = getYang24MoveUrl(validMoveNumber);
   const selectedEntry = selectedDay ? entries.find((entry) => entry.date === selectedDay) ?? null : null;
   const savedLinkUrl = selectedEntry?.youtube_url ?? null;
   const normalizedLinkDraft = normalizeYouTubeUrl(linkInput);
@@ -1919,29 +1907,29 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
                   style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)" }}
                   placeholder="#"
                 />
-                {selectedMove && selectedMoveUrl && (
+                {selectedMove && savedLinkUrl && (
                   <a
-                    href={selectedMoveUrl}
+                    href={openSavedUrl ?? savedLinkUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label={`Open YouTube for move ${selectedMove.number}, ${selectedMove.name}`}
-                    title={`Watch ${selectedMove.name} on YouTube`}
+                    aria-label={`Open saved YouTube link for move ${selectedMove.number}, ${selectedMove.name}`}
+                    title="Open saved YouTube link"
                     className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors"
                     style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-muted)" }}
                   >
                     <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
                       <path d="M21.8 8.5s-.2-1.4-.8-2c-.8-.8-1.7-.8-2.1-.9C16 5.3 12 5.3 12 5.3h0s-4 0-6.9.3c-.4 0-1.3.1-2.1.9-.6.6-.8 2-.8 2S2 10.1 2 11.6v.8c0 1.5.2 3.1.2 3.1s.2 1.4.8 2c.8.8 1.8.8 2.2.9 1.6.2 6.8.3 6.8.3s4 0 6.9-.3c.4 0 1.3-.1 2.1-.9.6-.6.8-2 .8-2s.2-1.6.2-3.1v-.8c0-1.5-.2-3.1-.2-3.1zM9.6 14.1V9.8l4.5 2.2-4.5 2.1z" />
                     </svg>
-                    <span className="max-w-[14rem] truncate">{selectedMove.name}</span>
+                    <span className="max-w-[14rem] truncate">Saved link</span>
                   </a>
                 )}
               </label>
               {selectedMove && (
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-wider text-[var(--text-muted)]">YouTube link</span>
+                    <span className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Saved YouTube link</span>
                     <span className="text-[11px] text-[var(--text-muted)] truncate max-w-[60%]">
-                      {savedLinkUrl ? getMoveUrlLabel(savedLinkUrl) : "No link yet"}
+                      {savedLinkUrl ? getMoveUrlLabel(savedLinkUrl) : "No saved link yet"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
