@@ -73,10 +73,16 @@ export async function POST(req: NextRequest) {
       : null;
 
     if (youtube_url !== undefined && effectiveMoveNumber) {
+      const normalizedYoutubeUrl = youtube_url?.trim() ? String(youtube_url).trim() : null;
       const linkRow = {
         move_number: effectiveMoveNumber,
-        youtube_url: youtube_url?.trim() ? String(youtube_url).trim() : null,
+        youtube_url: normalizedYoutubeUrl,
       };
+
+      // Prefer storing directly on china_prep when that column exists, but keep the
+      // legacy per-move table in sync so either schema shape can serve reads.
+      await supabase.from("china_prep").update({ youtube_url: normalizedYoutubeUrl }).eq("date", date);
+
       const linkResult = await supabase
         .from("china_move_links")
         .upsert(linkRow, { onConflict: "move_number" })
@@ -85,7 +91,7 @@ export async function POST(req: NextRequest) {
       if (linkResult.error) {
         return NextResponse.json({ error: linkResult.error.message }, { status: 500 });
       }
-      data = { ...data, youtube_url: linkResult.data?.youtube_url ?? null };
+      data = { ...data, youtube_url: normalizedYoutubeUrl ?? linkResult.data?.youtube_url ?? null };
     } else {
       data = { ...data, youtube_url: null };
     }
