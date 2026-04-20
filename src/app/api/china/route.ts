@@ -11,12 +11,21 @@ export async function GET() {
       .order("date", { ascending: true });
 
     if (error?.message?.includes("youtube_url")) {
-      const fallback = await supabase
-        .from("china_prep")
-        .select("date, move_learned, full_run, notes")
-        .order("date", { ascending: true });
-      data = (fallback.data ?? []).map((row) => ({ ...row, youtube_url: null }));
-      error = fallback.error;
+      const [prepFallback, linkRows] = await Promise.all([
+        supabase
+          .from("china_prep")
+          .select("date, move_learned, full_run, notes")
+          .order("date", { ascending: true }),
+        supabase
+          .from("china_move_links")
+          .select("move_number, youtube_url"),
+      ]);
+      const linkMap = new Map((linkRows.data ?? []).map((row) => [row.move_number, row.youtube_url]));
+      data = (prepFallback.data ?? []).map((row) => ({
+        ...row,
+        youtube_url: row.move_learned ? (linkMap.get(row.move_learned) ?? null) : null,
+      }));
+      error = prepFallback.error ?? linkRows.error;
     }
 
     if (error) {
@@ -47,29 +56,38 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServiceClient();
 
-    const withYoutube = {
-      ...baseRow,
-      ...(youtube_url !== undefined ? { youtube_url: youtube_url?.trim() ? String(youtube_url).trim() : null } : {}),
-    };
-
     let { data, error } = await supabase
       .from("china_prep")
-      .upsert(withYoutube, { onConflict: "date" })
+      .upsert(baseRow, { onConflict: "date" })
       .select()
       .single();
 
-    if (error?.message?.includes("youtube_url")) {
-      const fallback = await supabase
-        .from("china_prep")
-        .upsert(baseRow, { onConflict: "date" })
-        .select()
-        .single();
-      data = fallback.data ? { ...fallback.data, youtube_url: null } : null;
-      error = fallback.error;
-    }
-
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const effectiveMoveNumber = typeof move_learned === "number"
+      ? move_learned
+      : typeof data?.move_learned === "number"
+      ? data.move_learned
+      : null;
+
+    if (youtube_url !== undefined && effectiveMoveNumber) {
+      const linkRow = {
+        move_number: effectiveMoveNumber,
+        youtube_url: youtube_url?.trim() ? String(youtube_url).trim() : null,
+      };
+      const linkResult = await supabase
+        .from("china_move_links")
+        .upsert(linkRow, { onConflict: "move_number" })
+        .select("move_number, youtube_url")
+        .single();
+      if (linkResult.error) {
+        return NextResponse.json({ error: linkResult.error.message }, { status: 500 });
+      }
+      data = { ...data, youtube_url: linkResult.data?.youtube_url ?? null };
+    } else {
+      data = { ...data, youtube_url: null };
     }
 
     return NextResponse.json({ ok: true, data });
