@@ -1622,7 +1622,6 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [linkInput, setLinkInput] = useState("");
-  const [linkSaving, setLinkSaving] = useState(false);
 
   const parsedMoveNumber = moveInput ? parseInt(moveInput, 10) : null;
   const validMoveNumber = parsedMoveNumber && !isNaN(parsedMoveNumber) ? parsedMoveNumber : null;
@@ -1630,7 +1629,6 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
   const selectedEntry = selectedDay ? entries.find((entry) => entry.date === selectedDay) ?? null : null;
   const savedLinkUrl = selectedEntry?.youtube_url ?? null;
   const normalizedLinkDraft = normalizeYouTubeUrl(linkInput);
-  const linkHasChanges = (normalizedLinkDraft || null) !== (savedLinkUrl || null);
   const openSavedUrl = savedLinkUrl
     ? (savedLinkUrl.startsWith("http") ? savedLinkUrl : `https://${savedLinkUrl}`)
     : null;
@@ -1727,13 +1725,6 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
     await onDelete(selectedDay);
     setDeleting(false);
     setSelectedDay(null);
-  }
-
-  async function handleSaveLink() {
-    if (!selectedDay) return;
-    setLinkSaving(true);
-    await onSave({ date: selectedDay, youtube_url: normalizedLinkDraft || null });
-    setLinkSaving(false);
   }
 
   return (
