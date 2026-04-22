@@ -17,20 +17,26 @@ type BlockSetting = {
 type Settings = {
   introTime: number;
   blockTime: number;
-  intervalTime: number;
   restTime: number;
   blockCount: number;
   blocks: BlockSetting[];
 };
 
+type TimerConfigRow = {
+  id: string;
+  name: string;
+  config: Settings;
+  created_at: string;
+  updated_at: string;
+};
+
 function buildBlocks(count: number, existing: BlockSetting[] = []) {
-  return Array.from({ length: count }, (_, index) => existing[index] ?? { label: `Block ${index + 1}`, halfwayAlert: true });
+  return Array.from({ length: count }, (_, index) => existing[index] ?? { label: `Block ${index + 1}`, halfwayAlert: false });
 }
 
 const defaultSettings: Settings = {
   introTime: 10,
   blockTime: 60,
-  intervalTime: 30,
   restTime: 20,
   blockCount: 3,
   blocks: buildBlocks(3),
@@ -47,6 +53,18 @@ function formatTime(total: number) {
   const m = Math.floor(s / 60);
   const sec = s % 60;
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function normalizeSettings(input: Partial<Settings> | null | undefined): Settings {
+  const base = input ?? {};
+  const blockCount = Math.max(1, Number.isFinite(base.blockCount) ? Math.floor(base.blockCount ?? 3) : 3);
+  return {
+    introTime: Math.max(0, Math.floor(base.introTime ?? defaultSettings.introTime)),
+    blockTime: Math.max(0, Math.floor(base.blockTime ?? defaultSettings.blockTime)),
+    restTime: Math.max(0, Math.floor(base.restTime ?? defaultSettings.restTime)),
+    blockCount,
+    blocks: buildBlocks(blockCount, Array.isArray(base.blocks) ? base.blocks : []),
+  };
 }
 
 function useAudio() {
@@ -81,7 +99,7 @@ function useAudio() {
     osc.stop(now + durationMs / 1000 + 0.02);
   };
 
-  const cue = async (kind: "intro" | "block" | "interval" | "rest" | "done") => {
+  const cue = async (kind: "intro" | "block" | "halfway" | "countdown" | "rest" | "done", remaining?: number) => {
     await ensureCtx();
     if (kind === "intro") {
       await beep(660, 140, 0.06);
@@ -93,9 +111,13 @@ function useAudio() {
       setTimeout(() => beep(1100, 120, 0.06, "triangle"), 170);
       return;
     }
-    if (kind === "interval") {
+    if (kind === "halfway") {
       await beep(520, 110, 0.05);
-      setTimeout(() => beep(520, 110, 0.05), 170);
+      return;
+    }
+    if (kind === "countdown") {
+      const freq = remaining === 1 ? 880 : remaining === 2 ? 784 : remaining === 3 ? 698 : remaining === 4 ? 659 : 587;
+      await beep(freq, 90, 0.06, "square");
       return;
     }
     if (kind === "rest") {
@@ -121,8 +143,13 @@ export default function SoMiPage() {
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [cueMessage, setCueMessage] = useState("Ready to roll");
+  const [configName, setConfigName] = useState("");
+  const [configRows, setConfigRows] = useState<TimerConfigRow[]>([]);
+  const [selectedConfigId, setSelectedConfigId] = useState("");
+  const [configStatus, setConfigStatus] = useState("No saved config selected");
   const lastCueRef = useRef<string | null>(null);
   const halfwayCueRef = useRef<string | null>(null);
+  const countdownCueRef = useRef<string | null>(null);
   const { cue } = useAudio();
 
   const totalSeconds = useMemo(() => {
@@ -152,6 +179,13 @@ export default function SoMiPage() {
   useEffect(() => {
     setSettings((s) => ({ ...s, blocks: buildBlocks(s.blockCount, s.blocks) }));
   }, [settings.blockCount]);
+
+  useEffect(() => {
+    void fetch("/api/somi-configs").then(async (res) => {
+      const data = await res.json();
+      if (res.ok) setConfigRows(data as TimerConfigRow[]);
+    }).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!running || startedAt === null) return;
@@ -223,17 +257,13 @@ export default function SoMiPage() {
         void cue("block");
         return;
       }
-      if (settings.intervalTime > 0 && phase.remaining === settings.intervalTime) {
-        setCueMessage(`Block ${phase.blockIndex} interval cue`);
-        void cue("interval");
-      }
       const block = settings.blocks[phase.blockIndex - 1];
       const halfwayTime = Math.max(1, Math.floor(settings.blockTime / 2));
       const halfwaySignature = `halfway:${phase.blockIndex}`;
       if (block?.halfwayAlert && phase.elapsedInBlock >= halfwayTime && halfwayCueRef.current !== halfwaySignature) {
         halfwayCueRef.current = halfwaySignature;
         setCueMessage(`${block.label} halfway alert`);
-        void cue("interval");
+        void cue("halfway");
       }
       return;
     }
@@ -241,11 +271,49 @@ export default function SoMiPage() {
       setCueMessage(`Rest after block ${phase.blockIndex}`);
       void cue("rest");
     }
-  }, [audioEnabled, cue, phase, running, settings.blockCount, settings.blockTime, settings.blocks, settings.intervalTime, settings.introTime, settings.restTime]);
+    const countdownRemaining = phase.kind === "intro" ? phase.remaining : phase.kind === "rest" ? phase.remaining : 0;
+    const countdownSignature = `${phase.kind}:${countdownRemaining}`;
+    if (countdownRemaining > 0 && countdownRemaining <= 5 && countdownCueRef.current !== countdownSignature) {
+      countdownCueRef.current = countdownSignature;
+      setCueMessage(`${countdownRemaining} seconds`);
+      void cue("countdown", countdownRemaining);
+    }
+  }, [audioEnabled, cue, phase, running, settings.blockCount, settings.blockTime, settings.blocks, settings.introTime, settings.restTime]);
+
+  const loadConfig = (row: TimerConfigRow) => {
+    setSettings(normalizeSettings(row.config));
+    setSelectedConfigId(row.id);
+    setConfigName(row.name);
+    setConfigStatus(`Loaded ${row.name}`);
+    setExpandedBlocks([]);
+  };
+
+  const saveConfig = async () => {
+    const name = configName.trim();
+    if (!name) {
+      setConfigStatus("Name the config first");
+      return;
+    }
+    const res = await fetch("/api/somi-configs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, config: settings }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setConfigStatus(data.error ?? "Save failed");
+      return;
+    }
+    const saved = data.data as TimerConfigRow;
+    setConfigRows((rows) => [saved, ...rows.filter((row) => row.id !== saved.id && row.name !== saved.name)]);
+    setSelectedConfigId(saved.id);
+    setConfigStatus(`Saved ${saved.name}`);
+  };
 
   const start = async () => {
     lastCueRef.current = null;
     halfwayCueRef.current = null;
+    countdownCueRef.current = null;
     setSessionSeconds(0);
     setEndedAt(null);
     setStartedAt(Date.now());
@@ -269,6 +337,7 @@ export default function SoMiPage() {
     setCueMessage("Ready to roll");
     lastCueRef.current = null;
     halfwayCueRef.current = null;
+    countdownCueRef.current = null;
   };
 
   const elapsedLabel = formatTime(sessionSeconds);
@@ -294,11 +363,25 @@ export default function SoMiPage() {
                 audio cues
               </label>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+
+            <div className="space-y-3 rounded-2xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
+              <div className="grid grid-cols-1 gap-2">
+                <input value={configName} onChange={(e) => setConfigName(e.target.value)} placeholder="Config name" className="w-full rounded-xl border bg-transparent px-3 py-2 outline-none" style={{ borderColor: "var(--border)" }} />
+                <div className="flex gap-2">
+                  <button onClick={saveConfig} className="rounded-full border px-4 py-2 text-sm font-semibold" style={{ borderColor: "currentColor" }}>Save</button>
+                  <select value={selectedConfigId} onChange={(e) => { const row = configRows.find((item) => item.id === e.target.value); if (row) loadConfig(row); }} className="min-w-0 flex-1 rounded-xl border bg-transparent px-3 py-2 text-sm outline-none" style={{ borderColor: "var(--border)" }}>
+                    <option value="">Saved configs</option>
+                    {configRows.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+                  </select>
+                </div>
+                <div className="text-xs text-[var(--text-muted)]">{configStatus}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
               {[
                 ["intro time", settings.introTime],
                 ["block time", settings.blockTime],
-                ["interval time", settings.intervalTime],
                 ["rest time", settings.restTime],
                 ["number of blocks", settings.blockCount],
               ].map(([label, value]) => (
@@ -313,7 +396,7 @@ export default function SoMiPage() {
                       if (label === "number of blocks") {
                         return { ...s, blockCount: nextValue, blocks: buildBlocks(nextValue, s.blocks) };
                       }
-                      const key = label === "intro time" ? "introTime" : label === "block time" ? "blockTime" : label === "interval time" ? "intervalTime" : "restTime";
+                      const key = label === "intro time" ? "introTime" : label === "block time" ? "blockTime" : "restTime";
                       return { ...s, [key]: nextValue };
                     })}
                     className="w-full rounded-xl border bg-transparent px-3 py-2 outline-none"
