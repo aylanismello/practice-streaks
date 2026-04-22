@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { effectiveWotLevel } from "@/lib/wot";
@@ -3065,6 +3066,17 @@ export default function Dashboard() {
 
       {/* HRV Trend Chart */}
       {ouraData && <HrvChart data={ouraData.sleep} resilienceData={ouraData.resilience} />}
+
+      <div className="pt-8 pb-2 flex justify-center">
+        <Link
+          href="/somi"
+          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold tracking-[0.25em] uppercase text-[var(--text-muted)] hover:text-[var(--text)]"
+          style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
+        >
+          <span>◦</span>
+          <span>SoMi++</span>
+        </Link>
+      </div>
 
 
       </>)}
