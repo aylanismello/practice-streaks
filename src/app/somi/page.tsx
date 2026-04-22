@@ -23,8 +23,16 @@ type Settings = {
   blocks: BlockSetting[];
 };
 
+type TimerConfigRow = {
+  id: string;
+  name: string;
+  config: Settings;
+  created_at: string;
+  updated_at: string;
+};
+
 function buildBlocks(count: number, existing: BlockSetting[] = []) {
-  return Array.from({ length: count }, (_, index) => existing[index] ?? { label: `Block ${index + 1}`, halfwayAlert: true });
+  return Array.from({ length: count }, (_, index) => existing[index] ?? { label: `Block ${index + 1}`, halfwayAlert: false });
 }
 
 const defaultSettings: Settings = {
@@ -47,6 +55,19 @@ function formatTime(total: number) {
   const m = Math.floor(s / 60);
   const sec = s % 60;
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function normalizeSettings(input: Partial<Settings> | null | undefined): Settings {
+  const base = input ?? {};
+  const blockCount = Math.max(1, Number.isFinite(base.blockCount) ? Math.floor(base.blockCount ?? 3) : 3);
+  return {
+    introTime: Math.max(0, Math.floor(base.introTime ?? defaultSettings.introTime)),
+    blockTime: Math.max(0, Math.floor(base.blockTime ?? defaultSettings.blockTime)),
+    intervalTime: Math.max(0, Math.floor(base.intervalTime ?? defaultSettings.intervalTime)),
+    restTime: Math.max(0, Math.floor(base.restTime ?? defaultSettings.restTime)),
+    blockCount,
+    blocks: buildBlocks(blockCount, Array.isArray(base.blocks) ? base.blocks : []),
+  };
 }
 
 function useAudio() {
@@ -121,20 +142,20 @@ export default function SoMiPage() {
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [cueMessage, setCueMessage] = useState("Ready to roll");
+  const [configName, setConfigName] = useState("");
+  const [configRows, setConfigRows] = useState<TimerConfigRow[]>([]);
+  const [selectedConfigId, setSelectedConfigId] = useState("");
+  const [configStatus, setConfigStatus] = useState("No saved config selected");
   const lastCueRef = useRef<string | null>(null);
   const halfwayCueRef = useRef<string | null>(null);
   const { cue } = useAudio();
 
-  const totalSeconds = useMemo(() => {
-    const blocks = settings.blockCount;
-    return settings.introTime + blocks * settings.blockTime + Math.max(0, blocks - 1) * settings.restTime;
-  }, [settings.blockCount, settings.introTime, settings.blockTime, settings.restTime]);
+  const totalSeconds = useMemo(() => settings.introTime + settings.blockCount * settings.blockTime + Math.max(0, settings.blockCount - 1) * settings.restTime, [settings.blockCount, settings.introTime, settings.blockTime, settings.restTime]);
 
   const progress = useMemo(() => {
     if (!running && !startedAt) return 0;
     if (phase.kind === "done") return 1;
-    const elapsed = sessionSeconds;
-    return Math.min(1, elapsed / Math.max(1, totalSeconds));
+    return Math.min(1, sessionSeconds / Math.max(1, totalSeconds));
   }, [phase.kind, running, sessionSeconds, startedAt, totalSeconds]);
 
   const phaseLabel = useMemo(() => {
@@ -152,6 +173,15 @@ export default function SoMiPage() {
   useEffect(() => {
     setSettings((s) => ({ ...s, blocks: buildBlocks(s.blockCount, s.blocks) }));
   }, [settings.blockCount]);
+
+  useEffect(() => {
+    void fetch("/api/somi-configs").then(async (res) => {
+      const data = await res.json();
+      if (res.ok) {
+        setConfigRows(data as TimerConfigRow[]);
+      }
+    }).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!running || startedAt === null) return;
@@ -199,14 +229,13 @@ export default function SoMiPage() {
 
   useEffect(() => {
     if (!running) return;
-    const signature =
-      phase.kind === "intro"
-        ? `intro:${phase.remaining}`
-        : phase.kind === "block"
-          ? `block:${phase.blockIndex}:${phase.remaining}`
-          : phase.kind === "rest"
-            ? `rest:${phase.blockIndex}:${phase.remaining}`
-            : "done";
+    const signature = phase.kind === "intro"
+      ? `intro:${phase.remaining}`
+      : phase.kind === "block"
+        ? `block:${phase.blockIndex}:${phase.remaining}`
+        : phase.kind === "rest"
+          ? `rest:${phase.blockIndex}:${phase.remaining}`
+          : "done";
 
     if (lastCueRef.current === signature) return;
     lastCueRef.current = signature;
@@ -242,6 +271,36 @@ export default function SoMiPage() {
       void cue("rest");
     }
   }, [audioEnabled, cue, phase, running, settings.blockCount, settings.blockTime, settings.blocks, settings.intervalTime, settings.introTime, settings.restTime]);
+
+  const loadConfig = (row: TimerConfigRow) => {
+    setSettings(normalizeSettings(row.config));
+    setSelectedConfigId(row.id);
+    setConfigName(row.name);
+    setConfigStatus(`Loaded ${row.name}`);
+    setExpandedBlocks([]);
+  };
+
+  const saveConfig = async () => {
+    const name = configName.trim();
+    if (!name) {
+      setConfigStatus("Name the config first");
+      return;
+    }
+    const res = await fetch("/api/somi-configs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, config: settings }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setConfigStatus(data.error ?? "Save failed");
+      return;
+    }
+    const saved = data.data as TimerConfigRow;
+    setConfigRows((rows) => [saved, ...rows.filter((row) => row.id !== saved.id && row.name !== saved.name)]);
+    setSelectedConfigId(saved.id);
+    setConfigStatus(`Saved ${saved.name}`);
+  };
 
   const start = async () => {
     lastCueRef.current = null;
@@ -294,14 +353,23 @@ export default function SoMiPage() {
                 audio cues
               </label>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              {[
-                ["intro time", settings.introTime],
-                ["block time", settings.blockTime],
-                ["interval time", settings.intervalTime],
-                ["rest time", settings.restTime],
-                ["number of blocks", settings.blockCount],
-              ].map(([label, value]) => (
+
+            <div className="space-y-3 rounded-2xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
+              <div className="grid grid-cols-1 gap-2">
+                <input value={configName} onChange={(e) => setConfigName(e.target.value)} placeholder="Config name" className="w-full rounded-xl border bg-transparent px-3 py-2 outline-none" style={{ borderColor: "var(--border)" }} />
+                <div className="flex gap-2">
+                  <button onClick={saveConfig} className="rounded-full border px-4 py-2 text-sm font-semibold" style={{ borderColor: "currentColor" }}>Save</button>
+                  <select value={selectedConfigId} onChange={(e) => { const row = configRows.find((item) => item.id === e.target.value); if (row) loadConfig(row); }} className="min-w-0 flex-1 rounded-xl border bg-transparent px-3 py-2 text-sm outline-none" style={{ borderColor: "var(--border)" }}>
+                    <option value="">Saved configs</option>
+                    {configRows.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+                  </select>
+                </div>
+                <div className="text-xs text-[var(--text-muted)]">{configStatus}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              {[["intro time", settings.introTime], ["block time", settings.blockTime], ["interval time", settings.intervalTime], ["rest time", settings.restTime], ["number of blocks", settings.blockCount]].map(([label, value]) => (
                 <label key={label as string} className="space-y-1">
                   <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">{label}</div>
                   <input
@@ -336,11 +404,7 @@ export default function SoMiPage() {
                   const open = expandedBlocks.includes(index);
                   return (
                     <div key={index} className="rounded-xl border" style={{ borderColor: "var(--border)" }}>
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
-                        onClick={() => setExpandedBlocks((current) => current.includes(index) ? current.filter((i) => i !== index) : [...current, index])}
-                      >
+                      <button type="button" className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left" onClick={() => setExpandedBlocks((current) => current.includes(index) ? current.filter((i) => i !== index) : [...current, index])}>
                         <div>
                           <div className="font-medium">{block.label}</div>
                           <div className="text-xs text-[var(--text-muted)]">Halfway alert {block.halfwayAlert ? "on" : "off"}</div>
