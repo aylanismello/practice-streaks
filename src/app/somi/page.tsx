@@ -368,6 +368,20 @@ export default function SoMiPage() {
     countdownCueRef.current = null;
   };
 
+  const primaryActionLabel = paused ? "Resume" : running ? "Pause" : "Start";
+
+  const handlePrimaryAction = () => {
+    if (running) {
+      pause();
+      return;
+    }
+    if (paused) {
+      resume();
+      return;
+    }
+    void start();
+  };
+
   const elapsedLabel = formatTime(sessionSeconds);
   const remainingLabel = phase.kind === "done" ? "00:00" : formatTime(phase.remaining);
 
@@ -544,8 +558,7 @@ export default function SoMiPage() {
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <button onClick={start} disabled={running} className="rounded-full px-6 py-3 font-semibold text-black disabled:opacity-40" style={{ background: "var(--text)" }}>Start</button>
-                <button onClick={paused ? resume : pause} disabled={!running && !paused} className="rounded-full border px-6 py-3 font-semibold disabled:opacity-40" style={{ borderColor: "currentColor" }}>{paused ? "Resume" : "Pause"}</button>
+                <button onClick={handlePrimaryAction} className="rounded-full px-6 py-3 font-semibold text-black" style={{ background: "var(--text)" }}>{primaryActionLabel}</button>
                 <button onClick={stop} disabled={!running && !paused} className="rounded-full border px-6 py-3 font-semibold disabled:opacity-40" style={{ borderColor: "currentColor" }}>Stop</button>
                 <button onClick={reset} className="rounded-full border px-6 py-3 font-semibold" style={{ borderColor: "currentColor" }}>Reset</button>
               </div>
