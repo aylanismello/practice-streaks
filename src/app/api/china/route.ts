@@ -72,14 +72,24 @@ export async function POST(req: NextRequest) {
       ? data.move_learned
       : null;
 
+    const normalizedYoutubeUrl = typeof youtube_url === "string" && youtube_url.trim()
+      ? youtube_url.trim()
+      : null;
+
+    if (youtube_url !== undefined && normalizedYoutubeUrl && !effectiveMoveNumber) {
+      return NextResponse.json(
+        { error: "move_learned is required to save a YouTube link" },
+        { status: 400 }
+      );
+    }
+
     if (youtube_url !== undefined && effectiveMoveNumber) {
-      const linkRow = {
-        move_number: effectiveMoveNumber,
-        youtube_url: youtube_url?.trim() ? String(youtube_url).trim() : null,
-      };
       const linkResult = await supabase
         .from("china_move_links")
-        .upsert(linkRow, { onConflict: "move_number" })
+        .upsert(
+          { move_number: effectiveMoveNumber, youtube_url: normalizedYoutubeUrl },
+          { onConflict: "move_number" }
+        )
         .select("move_number, youtube_url")
         .single();
       if (linkResult.error) {

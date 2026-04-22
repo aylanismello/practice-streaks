@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { effectiveWotLevel } from "@/lib/wot";
@@ -1622,7 +1623,6 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [linkInput, setLinkInput] = useState("");
-  const [linkSaving, setLinkSaving] = useState(false);
 
   const parsedMoveNumber = moveInput ? parseInt(moveInput, 10) : null;
   const validMoveNumber = parsedMoveNumber && !isNaN(parsedMoveNumber) ? parsedMoveNumber : null;
@@ -1630,7 +1630,6 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
   const selectedEntry = selectedDay ? entries.find((entry) => entry.date === selectedDay) ?? null : null;
   const savedLinkUrl = selectedEntry?.youtube_url ?? null;
   const normalizedLinkDraft = normalizeYouTubeUrl(linkInput);
-  const linkHasChanges = (normalizedLinkDraft || null) !== (savedLinkUrl || null);
   const openSavedUrl = savedLinkUrl
     ? (savedLinkUrl.startsWith("http") ? savedLinkUrl : `https://${savedLinkUrl}`)
     : null;
@@ -1727,13 +1726,6 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
     await onDelete(selectedDay);
     setDeleting(false);
     setSelectedDay(null);
-  }
-
-  async function handleSaveLink() {
-    if (!selectedDay) return;
-    setLinkSaving(true);
-    await onSave({ date: selectedDay, youtube_url: normalizedLinkDraft || null });
-    setLinkSaving(false);
   }
 
   return (
@@ -3074,6 +3066,17 @@ export default function Dashboard() {
 
       {/* HRV Trend Chart */}
       {ouraData && <HrvChart data={ouraData.sleep} resilienceData={ouraData.resilience} />}
+
+      <div className="pt-8 pb-2 flex justify-center">
+        <Link
+          href="/somi"
+          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold tracking-[0.25em] uppercase text-[var(--text-muted)] hover:text-[var(--text)]"
+          style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
+        >
+          <span>◦</span>
+          <span>SoMi++</span>
+        </Link>
+      </div>
 
 
       </>)}
