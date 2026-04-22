@@ -150,6 +150,7 @@ export default function SoMiPage() {
   const [configRows, setConfigRows] = useState<TimerConfigRow[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState("");
   const [configStatus, setConfigStatus] = useState("No saved config selected");
+  const [blockBreakdownCollapsed, setBlockBreakdownCollapsed] = useState(false);
   const lastCueRef = useRef<string | null>(null);
   const halfwayCueRef = useRef<string | null>(null);
   const countdownCueRef = useRef<string | null>(null);
@@ -313,6 +314,29 @@ export default function SoMiPage() {
     setConfigStatus(`Saved ${saved.name}`);
   };
 
+  const deleteConfig = async () => {
+    const row = configRows.find((item) => item.id === selectedConfigId);
+    if (!row) {
+      setConfigStatus("Pick a saved config first");
+      return;
+    }
+    if (!window.confirm(`Delete "${row.name}"?`)) return;
+
+    const res = await fetch("/api/somi-configs", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: row.id }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setConfigStatus(data.error ?? "Delete failed");
+      return;
+    }
+    setConfigRows((rows) => rows.filter((item) => item.id !== row.id));
+    setSelectedConfigId("");
+    setConfigStatus(`Deleted ${row.name}`);
+  };
+
   const start = async () => {
     lastCueRef.current = null;
     halfwayCueRef.current = null;
@@ -393,7 +417,7 @@ export default function SoMiPage() {
           <div className="text-xs uppercase tracking-[0.35em] text-[var(--text-muted)]">SoMi++ batch timer</div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start">
           <section className="rounded-3xl border p-4 md:p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
             <div className="mb-4 flex items-center justify-between">
               <div>
@@ -411,6 +435,7 @@ export default function SoMiPage() {
                 <input value={configName} onChange={(e) => setConfigName(e.target.value)} placeholder="Config name" className="w-full rounded-xl border bg-transparent px-3 py-2 outline-none" style={{ borderColor: "var(--border)" }} />
                 <div className="flex gap-2">
                   <button onClick={saveConfig} className="rounded-full border px-4 py-2 text-sm font-semibold" style={{ borderColor: "currentColor" }}>Save</button>
+                  <button onClick={deleteConfig} disabled={!selectedConfigId} className="rounded-full border px-4 py-2 text-sm font-semibold disabled:opacity-40" style={{ borderColor: "currentColor" }}>Delete</button>
                   <select value={selectedConfigId} onChange={(e) => { const row = configRows.find((item) => item.id === e.target.value); if (row) loadConfig(row); }} className="min-w-0 flex-1 rounded-xl border bg-transparent px-3 py-2 text-sm outline-none" style={{ borderColor: "var(--border)" }}>
                     <option value="">Saved configs</option>
                     {configRows.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
@@ -454,9 +479,11 @@ export default function SoMiPage() {
                   <div className="text-sm font-semibold">Block breakdown</div>
                   <div className="text-xs text-[var(--text-muted)]">Toggle halfway alerts per block</div>
                 </div>
-                <div className="text-xs text-[var(--text-muted)]">{settings.blockCount} blocks</div>
+                <button type="button" onClick={() => setBlockBreakdownCollapsed((current) => !current)} className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "currentColor" }}>
+                  {blockBreakdownCollapsed ? "Expand" : "Collapse"}
+                </button>
               </div>
-              <div className="space-y-2">
+              {!blockBreakdownCollapsed && <div className="space-y-2">
                 {settings.blocks.map((block, index) => {
                   const open = expandedBlocks.includes(index);
                   return (
@@ -504,7 +531,7 @@ export default function SoMiPage() {
                     </div>
                   );
                 })}
-              </div>
+              </div>}
             </div>
 
             <div className="mt-4 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
