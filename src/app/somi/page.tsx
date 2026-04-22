@@ -136,10 +136,13 @@ function useAudio() {
 export default function SoMiPage() {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [running, setRunning] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "intro", remaining: defaultSettings.introTime });
   const [expandedBlocks, setExpandedBlocks] = useState<number[]>([]);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [endedAt, setEndedAt] = useState<number | null>(null);
+  const [pauseAccumulatedMs, setPauseAccumulatedMs] = useState(0);
+  const [pausedAt, setPausedAt] = useState<number | null>(null);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [cueMessage, setCueMessage] = useState("Ready to roll");
@@ -190,7 +193,7 @@ export default function SoMiPage() {
   useEffect(() => {
     if (!running || startedAt === null) return;
     const tick = window.setInterval(() => {
-      const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      const elapsed = Math.max(0, Math.floor((Date.now() - startedAt - pauseAccumulatedMs) / 1000));
       setSessionSeconds(elapsed);
 
       const introEnd = settings.introTime;
@@ -229,7 +232,7 @@ export default function SoMiPage() {
     }, 250);
 
     return () => window.clearInterval(tick);
-  }, [audioEnabled, cue, running, startedAt, settings.blockCount, settings.blockTime, settings.introTime, settings.restTime]);
+  }, [audioEnabled, cue, pauseAccumulatedMs, running, startedAt, settings.blockCount, settings.blockTime, settings.introTime, settings.restTime]);
 
   useEffect(() => {
     if (!running) return;
@@ -316,23 +319,48 @@ export default function SoMiPage() {
     countdownCueRef.current = null;
     setSessionSeconds(0);
     setEndedAt(null);
+    setPaused(false);
+    setPausedAt(null);
+    setPauseAccumulatedMs(0);
     setStartedAt(Date.now());
     setPhase({ kind: "intro", remaining: settings.introTime });
     setRunning(true);
     setCueMessage("Session armed");
   };
 
+  const pause = () => {
+    if (!running || startedAt === null) return;
+    setPaused(true);
+    setRunning(false);
+    setPausedAt(Date.now());
+    setCueMessage("Paused");
+  };
+
+  const resume = () => {
+    if (!paused || pausedAt === null) return;
+    setPauseAccumulatedMs((total) => total + (Date.now() - pausedAt));
+    setPaused(false);
+    setPausedAt(null);
+    setRunning(true);
+    setCueMessage("Resumed");
+  };
+
   const stop = () => {
     setRunning(false);
+    setPaused(false);
+    setPausedAt(null);
     setEndedAt(Date.now());
     setCueMessage("Stopped");
   };
 
   const reset = () => {
     setRunning(false);
+    setPaused(false);
     setStartedAt(null);
     setEndedAt(null);
     setSessionSeconds(0);
+    setPauseAccumulatedMs(0);
+    setPausedAt(null);
     setPhase({ kind: "intro", remaining: settings.introTime });
     setCueMessage("Ready to roll");
     lastCueRef.current = null;
@@ -491,7 +519,7 @@ export default function SoMiPage() {
               </div>
 
               <div className="rounded-[2rem] border bg-black/20 p-5 md:p-8 text-center shadow-2xl backdrop-blur-sm" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
-                <div className="text-[10px] uppercase tracking-[0.45em] opacity-70">{running ? "countdown" : "ready"}</div>
+                <div className="text-[10px] uppercase tracking-[0.45em] opacity-70">{running ? "countdown" : paused ? "paused" : "ready"}</div>
                 <div className="mt-2 text-[clamp(4rem,16vw,11rem)] font-black leading-none tabular-nums">{remainingLabel}</div>
                 <div className="mt-3 text-sm md:text-lg opacity-80">
                   {phase.kind === "intro"
@@ -517,13 +545,15 @@ export default function SoMiPage() {
 
               <div className="flex flex-wrap gap-3">
                 <button onClick={start} disabled={running} className="rounded-full px-6 py-3 font-semibold text-black disabled:opacity-40" style={{ background: "var(--text)" }}>Start</button>
-                <button onClick={stop} disabled={!running} className="rounded-full border px-6 py-3 font-semibold disabled:opacity-40" style={{ borderColor: "currentColor" }}>Stop</button>
+                <button onClick={paused ? resume : pause} disabled={!running && !paused} className="rounded-full border px-6 py-3 font-semibold disabled:opacity-40" style={{ borderColor: "currentColor" }}>{paused ? "Resume" : "Pause"}</button>
+                <button onClick={stop} disabled={!running && !paused} className="rounded-full border px-6 py-3 font-semibold disabled:opacity-40" style={{ borderColor: "currentColor" }}>Stop</button>
                 <button onClick={reset} className="rounded-full border px-6 py-3 font-semibold" style={{ borderColor: "currentColor" }}>Reset</button>
               </div>
 
               <div className="text-xs uppercase tracking-[0.35em] opacity-70">
                 {startedAt ? `started ${new Date(startedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "not started yet"}
-                {endedAt && !running ? ` · ended ${new Date(endedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}
+                {paused ? " · paused" : ""}
+                {endedAt && !running && !paused ? ` · ended ${new Date(endedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}
               </div>
             </div>
           </section>
