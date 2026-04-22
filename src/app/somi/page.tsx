@@ -5,9 +5,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type Phase =
   | { kind: "intro"; remaining: number }
-  | { kind: "block"; blockIndex: number; remaining: number }
+  | { kind: "block"; blockIndex: number; remaining: number; elapsedInBlock: number }
   | { kind: "rest"; blockIndex: number; remaining: number }
   | { kind: "done" };
+
+type BlockSetting = {
+  label: string;
+  halfwayAlert: boolean;
+};
 
 type Settings = {
   introTime: number;
@@ -15,7 +20,12 @@ type Settings = {
   intervalTime: number;
   restTime: number;
   blockCount: number;
+  blocks: BlockSetting[];
 };
+
+function buildBlocks(count: number, existing: BlockSetting[] = []) {
+  return Array.from({ length: count }, (_, index) => existing[index] ?? { label: `Block ${index + 1}`, halfwayAlert: true });
+}
 
 const defaultSettings: Settings = {
   introTime: 10,
@@ -23,6 +33,7 @@ const defaultSettings: Settings = {
   intervalTime: 30,
   restTime: 20,
   blockCount: 3,
+  blocks: buildBlocks(3),
 };
 
 function clampInt(value: string, fallback: number, min = 0, max = 999) {
@@ -104,18 +115,20 @@ export default function SoMiPage() {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "intro", remaining: defaultSettings.introTime });
+  const [expandedBlocks, setExpandedBlocks] = useState<number[]>([]);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [endedAt, setEndedAt] = useState<number | null>(null);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [cueMessage, setCueMessage] = useState("Ready to roll");
   const lastCueRef = useRef<string | null>(null);
+  const halfwayCueRef = useRef<string | null>(null);
   const { cue } = useAudio();
 
   const totalSeconds = useMemo(() => {
     const blocks = settings.blockCount;
     return settings.introTime + blocks * settings.blockTime + Math.max(0, blocks - 1) * settings.restTime;
-  }, [settings]);
+  }, [settings.blockCount, settings.introTime, settings.blockTime, settings.restTime]);
 
   const progress = useMemo(() => {
     if (!running && !startedAt) return 0;
@@ -126,15 +139,19 @@ export default function SoMiPage() {
 
   const phaseLabel = useMemo(() => {
     if (phase.kind === "intro") return "Intro";
-    if (phase.kind === "block") return `Block ${phase.blockIndex} of ${settings.blockCount}`;
+    if (phase.kind === "block") return `${settings.blocks[phase.blockIndex - 1]?.label ?? `Block ${phase.blockIndex}`}`;
     if (phase.kind === "rest") return `Rest after block ${phase.blockIndex}`;
     return "Complete";
-  }, [phase, settings.blockCount]);
+  }, [phase, settings.blocks]);
 
   const phaseTone = phase.kind === "intro" ? "bg-slate-900 text-cyan-300 border-cyan-400/30"
     : phase.kind === "block" ? "bg-emerald-950 text-emerald-200 border-emerald-400/30"
     : phase.kind === "rest" ? "bg-amber-950 text-amber-200 border-amber-400/30"
     : "bg-violet-950 text-violet-200 border-violet-400/30";
+
+  useEffect(() => {
+    setSettings((s) => ({ ...s, blocks: buildBlocks(s.blockCount, s.blocks) }));
+  }, [settings.blockCount]);
 
   useEffect(() => {
     if (!running || startedAt === null) return;
@@ -153,7 +170,7 @@ export default function SoMiPage() {
       for (let i = 1; i <= settings.blockCount; i++) {
         if (remainingElapsed < settings.blockTime) {
           const remaining = settings.blockTime - remainingElapsed;
-          setPhase((prev) => prev.kind === "block" && prev.blockIndex === i && prev.remaining === remaining ? prev : { kind: "block", blockIndex: i, remaining });
+          setPhase((prev) => prev.kind === "block" && prev.blockIndex === i && prev.remaining === remaining ? prev : { kind: "block", blockIndex: i, remaining, elapsedInBlock: settings.blockTime - remaining });
           return;
         }
         remainingElapsed -= settings.blockTime;
@@ -209,17 +226,26 @@ export default function SoMiPage() {
       if (settings.intervalTime > 0 && phase.remaining === settings.intervalTime) {
         setCueMessage(`Block ${phase.blockIndex} interval cue`);
         void cue("interval");
-        return;
       }
+      const block = settings.blocks[phase.blockIndex - 1];
+      const halfwayTime = Math.max(1, Math.floor(settings.blockTime / 2));
+      const halfwaySignature = `halfway:${phase.blockIndex}`;
+      if (block?.halfwayAlert && phase.elapsedInBlock >= halfwayTime && halfwayCueRef.current !== halfwaySignature) {
+        halfwayCueRef.current = halfwaySignature;
+        setCueMessage(`${block.label} halfway alert`);
+        void cue("interval");
+      }
+      return;
     }
     if (phase.kind === "rest" && phase.remaining === settings.restTime) {
       setCueMessage(`Rest after block ${phase.blockIndex}`);
       void cue("rest");
     }
-  }, [audioEnabled, cue, phase, running, settings.blockCount, settings.blockTime, settings.intervalTime, settings.introTime, settings.restTime]);
+  }, [audioEnabled, cue, phase, running, settings.blockCount, settings.blockTime, settings.blocks, settings.intervalTime, settings.introTime, settings.restTime]);
 
   const start = async () => {
     lastCueRef.current = null;
+    halfwayCueRef.current = null;
     setSessionSeconds(0);
     setEndedAt(null);
     setStartedAt(Date.now());
@@ -242,6 +268,7 @@ export default function SoMiPage() {
     setPhase({ kind: "intro", remaining: settings.introTime });
     setCueMessage("Ready to roll");
     lastCueRef.current = null;
+    halfwayCueRef.current = null;
   };
 
   const elapsedLabel = formatTime(sessionSeconds);
@@ -281,16 +308,80 @@ export default function SoMiPage() {
                     type="number"
                     min={0}
                     value={value as number}
-                    onChange={(e) => setSettings((s) => ({
-                      ...s,
-                      [label === "intro time" ? "introTime" : label === "block time" ? "blockTime" : label === "interval time" ? "intervalTime" : label === "rest time" ? "restTime" : "blockCount"]: clampInt(e.target.value, value as number, label === "number of blocks" ? 1 : 0, 999),
-                    }))}
+                    onChange={(e) => setSettings((s) => {
+                      const nextValue = clampInt(e.target.value, value as number, label === "number of blocks" ? 1 : 0, 999);
+                      if (label === "number of blocks") {
+                        return { ...s, blockCount: nextValue, blocks: buildBlocks(nextValue, s.blocks) };
+                      }
+                      const key = label === "intro time" ? "introTime" : label === "block time" ? "blockTime" : label === "interval time" ? "intervalTime" : "restTime";
+                      return { ...s, [key]: nextValue };
+                    })}
                     className="w-full rounded-xl border bg-transparent px-3 py-2 outline-none"
                     style={{ borderColor: "var(--border)" }}
                   />
                 </label>
               ))}
             </div>
+
+            <div className="mt-4 rounded-2xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Block breakdown</div>
+                  <div className="text-xs text-[var(--text-muted)]">Toggle halfway alerts per block</div>
+                </div>
+                <div className="text-xs text-[var(--text-muted)]">{settings.blockCount} blocks</div>
+              </div>
+              <div className="space-y-2">
+                {settings.blocks.map((block, index) => {
+                  const open = expandedBlocks.includes(index);
+                  return (
+                    <div key={index} className="rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
+                        onClick={() => setExpandedBlocks((current) => current.includes(index) ? current.filter((i) => i !== index) : [...current, index])}
+                      >
+                        <div>
+                          <div className="font-medium">{block.label}</div>
+                          <div className="text-xs text-[var(--text-muted)]">Halfway alert {block.halfwayAlert ? "on" : "off"}</div>
+                        </div>
+                        <div className="text-xs text-[var(--text-muted)]">{open ? "collapse" : "expand"}</div>
+                      </button>
+                      {open && (
+                        <div className="space-y-3 border-t px-3 py-3" style={{ borderColor: "var(--border)" }}>
+                          <label className="block space-y-1 text-sm">
+                            <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">Block label</div>
+                            <input
+                              type="text"
+                              value={block.label}
+                              onChange={(e) => setSettings((s) => ({
+                                ...s,
+                                blocks: s.blocks.map((item, itemIndex) => itemIndex === index ? { ...item, label: e.target.value } : item),
+                              }))}
+                              className="w-full rounded-xl border bg-transparent px-3 py-2 outline-none"
+                              style={{ borderColor: "var(--border)" }}
+                            />
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={block.halfwayAlert}
+                              onChange={(e) => setSettings((s) => ({
+                                ...s,
+                                blocks: s.blocks.map((item, itemIndex) => itemIndex === index ? { ...item, halfwayAlert: e.target.checked } : item),
+                              }))}
+                            />
+                            has halfway alert?
+                          </label>
+                          <div className="text-xs text-[var(--text-muted)]">Halfway is derived from half the block duration.</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="mt-4 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
               <div className="flex items-center justify-between text-[var(--text-muted)]">
                 <span>Total session</span>
@@ -323,7 +414,7 @@ export default function SoMiPage() {
                   {phase.kind === "intro"
                     ? "Get framed, breathe, then roll on cue."
                     : phase.kind === "block"
-                      ? `Keep going. Block ${phase.blockIndex} of ${settings.blockCount}.`
+                      ? `Keep going. ${settings.blocks[phase.blockIndex - 1]?.label ?? `Block ${phase.blockIndex}`}.`
                       : phase.kind === "rest"
                         ? "Rest, reset, then go again."
                         : "All blocks complete."}
