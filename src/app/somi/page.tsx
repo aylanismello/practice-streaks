@@ -112,7 +112,7 @@ function useAudio() {
       return;
     }
     if (kind === "halfway") {
-      await beep(520, 110, 0.05);
+      await beep(520, 110, 0.08);
       return;
     }
     if (kind === "countdown") {
@@ -269,13 +269,12 @@ export default function SoMiPage() {
         setCueMessage(`${block.label} halfway alert`);
         void cue("halfway");
       }
-      return;
     }
     if (phase.kind === "rest" && phase.remaining === settings.restTime) {
       setCueMessage(`Rest after block ${phase.blockIndex}`);
       void cue("rest");
     }
-    const countdownRemaining = phase.kind === "intro" ? phase.remaining : phase.kind === "rest" ? phase.remaining : 0;
+    const countdownRemaining = phase.kind === "intro" || phase.kind === "rest" || phase.kind === "block" ? phase.remaining : 0;
     const countdownSignature = `${phase.kind}:${countdownRemaining}`;
     if (countdownRemaining > 0 && countdownRemaining <= 5 && countdownCueRef.current !== countdownSignature) {
       countdownCueRef.current = countdownSignature;
