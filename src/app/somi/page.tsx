@@ -275,7 +275,7 @@ export default function SoMiPage() {
       void cue("rest");
     }
     const countdownRemaining = phase.kind === "intro" || phase.kind === "rest" || phase.kind === "block" ? phase.remaining : 0;
-    const countdownSignature = `${phase.kind}:${countdownRemaining}`;
+    const countdownSignature = `${signature}:countdown:${countdownRemaining}`;
     if (countdownRemaining > 0 && countdownRemaining <= 5 && countdownCueRef.current !== countdownSignature) {
       countdownCueRef.current = countdownSignature;
       setCueMessage(`${countdownRemaining} seconds`);
