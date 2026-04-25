@@ -112,7 +112,8 @@ function useAudio() {
       return;
     }
     if (kind === "halfway") {
-      await beep(520, 110, 0.08);
+      await beep(740, 180, 0.12, "triangle");
+      setTimeout(() => beep(932, 220, 0.11, "triangle"), 150);
       return;
     }
     if (kind === "countdown") {
