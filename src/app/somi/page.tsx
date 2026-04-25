@@ -12,6 +12,7 @@ type Phase =
 type BlockSetting = {
   label: string;
   halfwayAlert: boolean;
+  thirdsAlert: boolean;
 };
 
 type Settings = {
@@ -30,8 +31,15 @@ type TimerConfigRow = {
   updated_at: string;
 };
 
-function buildBlocks(count: number, existing: BlockSetting[] = []) {
-  return Array.from({ length: count }, (_, index) => existing[index] ?? { label: `Block ${index + 1}`, halfwayAlert: false });
+function buildBlocks(count: number, existing: Array<Partial<BlockSetting>> = []): BlockSetting[] {
+  return Array.from({ length: count }, (_, index) => {
+    const current = existing[index];
+    return {
+      label: typeof current?.label === "string" && current.label.length > 0 ? current.label : `Block ${index + 1}`,
+      halfwayAlert: Boolean(current?.halfwayAlert),
+      thirdsAlert: Boolean(current?.thirdsAlert),
+    };
+  });
 }
 
 const defaultSettings: Settings = {
@@ -99,7 +107,7 @@ function useAudio() {
     osc.stop(now + durationMs / 1000 + 0.02);
   };
 
-  const cue = async (kind: "intro" | "block" | "halfway" | "countdown" | "rest" | "done", remaining?: number) => {
+  const cue = async (kind: "intro" | "block" | "halfway" | "thirds" | "countdown" | "rest" | "done", remaining?: number) => {
     await ensureCtx();
     if (kind === "intro") {
       await beep(660, 140, 0.06);
@@ -114,6 +122,12 @@ function useAudio() {
     if (kind === "halfway") {
       await beep(740, 180, 0.12, "triangle");
       setTimeout(() => beep(932, 220, 0.11, "triangle"), 150);
+      return;
+    }
+    if (kind === "thirds") {
+      await beep(587, 110, 0.1, "sawtooth");
+      setTimeout(() => beep(698, 110, 0.1, "sawtooth"), 140);
+      setTimeout(() => beep(880, 140, 0.1, "sawtooth"), 280);
       return;
     }
     if (kind === "countdown") {
@@ -154,6 +168,7 @@ export default function SoMiPage() {
   const [blockBreakdownCollapsed, setBlockBreakdownCollapsed] = useState(false);
   const lastCueRef = useRef<string | null>(null);
   const halfwayCueRef = useRef<string | null>(null);
+  const thirdsCueRef = useRef<Set<string>>(new Set());
   const countdownCueRef = useRef<string | null>(null);
   const { cue } = useAudio();
 
@@ -270,6 +285,22 @@ export default function SoMiPage() {
         setCueMessage(`${block.label} halfway alert`);
         void cue("halfway");
       }
+      if (block?.thirdsAlert) {
+        const firstThirdTime = Math.max(1, Math.floor(settings.blockTime / 3));
+        const secondThirdTime = Math.max(1, Math.floor((settings.blockTime * 2) / 3));
+        const firstSig = `thirds-first:${phase.blockIndex}`;
+        const secondSig = `thirds-second:${phase.blockIndex}`;
+        if (phase.elapsedInBlock >= firstThirdTime && !thirdsCueRef.current.has(firstSig)) {
+          thirdsCueRef.current.add(firstSig);
+          setCueMessage(`${block.label} one-third`);
+          void cue("thirds");
+        }
+        if (phase.elapsedInBlock >= secondThirdTime && !thirdsCueRef.current.has(secondSig)) {
+          thirdsCueRef.current.add(secondSig);
+          setCueMessage(`${block.label} two-thirds`);
+          void cue("thirds");
+        }
+      }
     }
     if (phase.kind === "rest" && phase.remaining === settings.restTime) {
       setCueMessage(`Rest after block ${phase.blockIndex}`);
@@ -340,6 +371,7 @@ export default function SoMiPage() {
   const start = async () => {
     lastCueRef.current = null;
     halfwayCueRef.current = null;
+    thirdsCueRef.current.clear();
     countdownCueRef.current = null;
     setSessionSeconds(0);
     setEndedAt(null);
@@ -389,6 +421,7 @@ export default function SoMiPage() {
     setCueMessage("Ready to roll");
     lastCueRef.current = null;
     halfwayCueRef.current = null;
+    thirdsCueRef.current.clear();
     countdownCueRef.current = null;
   };
 
@@ -477,7 +510,7 @@ export default function SoMiPage() {
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold">Block breakdown</div>
-                  <div className="text-xs text-[var(--text-muted)]">Toggle halfway alerts per block</div>
+                  <div className="text-xs text-[var(--text-muted)]">Label each block and toggle halfway / thirds alerts</div>
                 </div>
                 <button type="button" onClick={() => setBlockBreakdownCollapsed((current) => !current)} className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "currentColor" }}>
                   {blockBreakdownCollapsed ? "Expand" : "Collapse"}
@@ -486,21 +519,44 @@ export default function SoMiPage() {
               {!blockBreakdownCollapsed && <div className="space-y-2">
                 {settings.blocks.map((block, index) => {
                   const open = expandedBlocks.includes(index);
+                  const alertSummary = block.halfwayAlert && block.thirdsAlert
+                    ? "Halfway + thirds on"
+                    : block.halfwayAlert
+                      ? "Halfway on"
+                      : block.thirdsAlert
+                        ? "Thirds on"
+                        : "No alerts";
                   return (
-                    <div key={index} className="rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                    <div
+                      key={index}
+                      className={`rounded-xl border transition-colors ${open ? "ring-2 ring-cyan-400/40" : ""}`}
+                      style={{
+                        borderColor: open ? "rgba(34, 211, 238, 0.6)" : "var(--border)",
+                        background: open ? "rgba(34, 211, 238, 0.06)" : "transparent",
+                      }}
+                    >
                       <button
                         type="button"
                         className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
                         onClick={() => setExpandedBlocks((current) => current.includes(index) ? current.filter((i) => i !== index) : [...current, index])}
                       >
-                        <div>
-                          <div className="font-medium">{block.label}</div>
-                          <div className="text-xs text-[var(--text-muted)]">Halfway alert {block.halfwayAlert ? "on" : "off"}</div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">Block {index + 1}</span>
+                            {open && <span className="text-[10px] uppercase tracking-[0.2em] font-semibold" style={{ color: "rgb(34, 211, 238)" }}>editing</span>}
+                          </div>
+                          <div className="mt-0.5 truncate font-medium">{block.label}</div>
+                          <div className="text-xs text-[var(--text-muted)]">{alertSummary}</div>
                         </div>
-                        <div className="text-xs text-[var(--text-muted)]">{open ? "collapse" : "expand"}</div>
+                        <div className="text-xs font-semibold" style={{ color: open ? "rgb(34, 211, 238)" : "var(--text-muted)" }}>
+                          {open ? "close ▴" : "edit ▾"}
+                        </div>
                       </button>
                       {open && (
-                        <div className="space-y-3 border-t px-3 py-3" style={{ borderColor: "var(--border)" }}>
+                        <div className="space-y-3 border-t px-3 py-3" style={{ borderColor: "rgba(34, 211, 238, 0.3)" }}>
+                          <div className="text-[11px] uppercase tracking-wider" style={{ color: "rgb(34, 211, 238)" }}>
+                            Editing block {index + 1}
+                          </div>
                           <label className="block space-y-1 text-sm">
                             <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">Block label</div>
                             <input
@@ -523,9 +579,20 @@ export default function SoMiPage() {
                                 blocks: s.blocks.map((item, itemIndex) => itemIndex === index ? { ...item, halfwayAlert: e.target.checked } : item),
                               }))}
                             />
-                            has halfway alert?
+                            halfway alert (cue at 50%)
                           </label>
-                          <div className="text-xs text-[var(--text-muted)]">Halfway is derived from half the block duration.</div>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={block.thirdsAlert}
+                              onChange={(e) => setSettings((s) => ({
+                                ...s,
+                                blocks: s.blocks.map((item, itemIndex) => itemIndex === index ? { ...item, thirdsAlert: e.target.checked } : item),
+                              }))}
+                            />
+                            thirds alert (cues at 33% and 67%)
+                          </label>
+                          <div className="text-xs text-[var(--text-muted)]">Alerts are derived from this block&apos;s duration.</div>
                         </div>
                       )}
                     </div>
@@ -550,8 +617,10 @@ export default function SoMiPage() {
             <div className="flex flex-col gap-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.35em] opacity-70">Current phase</div>
-                  <div className="mt-1 text-2xl md:text-4xl font-semibold">{phaseLabel}</div>
+                  <div className="text-[11px] uppercase tracking-[0.35em] opacity-70">
+                    {phase.kind === "block" ? `Now · block ${phase.blockIndex} of ${settings.blockCount}` : "Current phase"}
+                  </div>
+                  <div className="mt-1 text-lg md:text-xl font-medium opacity-80">{phaseLabel}</div>
                 </div>
                 <div className="text-right text-xs opacity-80">
                   <div>elapsed</div>
@@ -561,12 +630,35 @@ export default function SoMiPage() {
 
               <div className="rounded-[2rem] border bg-black/20 p-5 md:p-8 text-center shadow-2xl backdrop-blur-sm" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
                 <div className="text-[10px] uppercase tracking-[0.45em] opacity-70">{running ? "countdown" : paused ? "paused" : "ready"}</div>
+
+                {phase.kind === "block" && (
+                  <div className="mt-3 text-[clamp(2rem,6vw,3.75rem)] font-bold leading-tight">
+                    {settings.blocks[phase.blockIndex - 1]?.label ?? `Block ${phase.blockIndex}`}
+                  </div>
+                )}
+                {phase.kind === "rest" && (
+                  <div className="mt-3 space-y-1">
+                    <div className="text-[10px] uppercase tracking-[0.3em] opacity-70">Coming up next</div>
+                    <div className="text-[clamp(2rem,6vw,3.75rem)] font-bold leading-tight">
+                      {settings.blocks[phase.blockIndex]?.label ?? `Block ${phase.blockIndex + 1}`}
+                    </div>
+                  </div>
+                )}
+                {phase.kind === "intro" && settings.blocks[0] && (
+                  <div className="mt-3 space-y-1">
+                    <div className="text-[10px] uppercase tracking-[0.3em] opacity-70">Starting with</div>
+                    <div className="text-[clamp(2rem,6vw,3.75rem)] font-bold leading-tight">
+                      {settings.blocks[0].label}
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-2 text-[clamp(4rem,16vw,11rem)] font-black leading-none tabular-nums">{remainingLabel}</div>
                 <div className="mt-3 text-sm md:text-lg opacity-80">
                   {phase.kind === "intro"
                     ? "Get framed, breathe, then roll on cue."
                     : phase.kind === "block"
-                      ? `Keep going. ${settings.blocks[phase.blockIndex - 1]?.label ?? `Block ${phase.blockIndex}`}.`
+                      ? "Keep going."
                       : phase.kind === "rest"
                         ? "Rest, reset, then go again."
                         : "All blocks complete."}
