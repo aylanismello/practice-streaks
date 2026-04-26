@@ -1,5 +1,24 @@
+export const WOT_SCORES = [1, 2, 3, 4, 5] as const;
+export type WotScore = (typeof WOT_SCORES)[number];
+
 export const WOT_LEVELS = ["green", "yellow_green", "yellow", "orange", "red"] as const;
 export type WotLevel = (typeof WOT_LEVELS)[number];
+
+export const WOT_SCORE_TO_LEVEL: Record<WotScore, WotLevel> = {
+  1: "red",
+  2: "orange",
+  3: "yellow",
+  4: "yellow_green",
+  5: "green",
+};
+
+export const WOT_LEVEL_TO_SCORE: Record<WotLevel, WotScore> = {
+  red: 1,
+  orange: 2,
+  yellow: 3,
+  yellow_green: 4,
+  green: 5,
+};
 
 export const WOT_LEVEL_ALIASES: Record<string, WotLevel> = {
   green: "green",
@@ -21,6 +40,22 @@ export const WOT_LEVEL_ALIASES: Record<string, WotLevel> = {
 export function normalizeWotLevel(input: unknown): WotLevel | null {
   if (typeof input !== "string") return null;
   return WOT_LEVEL_ALIASES[input.trim().toLowerCase()] ?? null;
+}
+
+export function normalizeWotScore(input: unknown): WotScore | null {
+  if (typeof input === "number" && Number.isInteger(input) && WOT_SCORES.includes(input as WotScore)) {
+    return input as WotScore;
+  }
+  if (typeof input !== "string") return null;
+
+  const trimmed = input.trim().toLowerCase();
+  const numeric = Number(trimmed);
+  if (Number.isInteger(numeric) && WOT_SCORES.includes(numeric as WotScore)) {
+    return numeric as WotScore;
+  }
+
+  const level = normalizeWotLevel(trimmed);
+  return level ? WOT_LEVEL_TO_SCORE[level] : null;
 }
 
 export function wotEmoji(level: WotLevel): string {
@@ -48,5 +83,10 @@ export function mapLegacyWotLevel(level: string): WotLevel {
 }
 
 export function effectiveWotLevel(row: { color: string; legacy_color?: string | null }): WotLevel {
-  return normalizeWotLevel(row.color) ?? normalizeWotLevel(row.legacy_color) ?? mapLegacyWotLevel(row.color);
+  const score = effectiveWotScore(row);
+  return WOT_SCORE_TO_LEVEL[score];
+}
+
+export function effectiveWotScore(row: { score?: number | string | null; color?: string | null; legacy_color?: string | null }): WotScore {
+  return normalizeWotScore(row.score) ?? normalizeWotScore(row.color) ?? normalizeWotScore(row.legacy_color) ?? 3;
 }

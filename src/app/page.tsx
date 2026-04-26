@@ -40,10 +40,11 @@ interface PracticeLog {
   practice_id: string;
 }
 
-import { wotCssColor, wotEmoji, type WotLevel } from "@/lib/wot";
+import { wotCssColor, wotEmoji, type WotLevel, type WotScore } from "@/lib/wot";
 
 interface WotEntry {
   date: string;
+  score?: WotScore;
   color: WotLevel;
   legacy_color?: string | null;
 }
