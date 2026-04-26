@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS wot_log (
   date date PRIMARY KEY,
+  score integer NOT NULL CHECK (score BETWEEN 1 AND 5),
   color text NOT NULL CHECK (color IN ('green', 'yellow_green', 'yellow', 'orange', 'red')),
   legacy_color text,
   created_at timestamptz DEFAULT now()

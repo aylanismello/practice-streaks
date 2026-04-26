@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
-import { effectiveWotLevel, normalizeWotLevel, WOT_LEVELS } from "@/lib/wot";
+import { effectiveWotLevel, effectiveWotScore, normalizeWotScore, WOT_SCORE_TO_LEVEL } from "@/lib/wot";
 
 export async function GET() {
   try {
@@ -11,7 +11,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("wot_log")
-      .select("date, color, legacy_color")
+      .select("date, score, color, legacy_color")
       .gte("date", sinceStr)
       .order("date", { ascending: false });
 
@@ -21,6 +21,7 @@ export async function GET() {
 
     return NextResponse.json(data?.map((row) => ({
       ...row,
+      score: effectiveWotScore(row),
       display_color: effectiveWotLevel(row),
     })));
   } catch {
@@ -30,21 +31,21 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { date, color } = await req.json();
+    const { date, score, color } = await req.json();
 
-    if (!date || !color) {
-      return NextResponse.json({ error: "date and color are required" }, { status: 400 });
+    if (!date || (score == null && color == null)) {
+      return NextResponse.json({ error: "date and score are required" }, { status: 400 });
     }
 
-    const normalized = normalizeWotLevel(color);
-    if (!normalized || !WOT_LEVELS.includes(normalized)) {
-      return NextResponse.json({ error: "invalid wot level" }, { status: 400 });
+    const normalized = normalizeWotScore(score ?? color);
+    if (!normalized) {
+      return NextResponse.json({ error: "invalid wot score" }, { status: 400 });
     }
 
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("wot_log")
-      .upsert({ date, color: normalized }, { onConflict: "date" })
+      .upsert({ date, score: normalized, color: WOT_SCORE_TO_LEVEL[normalized] }, { onConflict: "date" })
       .select()
       .single();
 
