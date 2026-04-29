@@ -61,7 +61,7 @@ export function normalizeWotScore(input: unknown): WotScore | null {
 export function wotEmoji(level: WotLevel): string {
   switch (level) {
     case "green": return "🟢";
-    case "yellow_green": return "🟡";
+    case "yellow_green": return "🟩";
     case "yellow": return "🟨";
     case "orange": return "🟠";
     case "red": return "🔴";
@@ -71,10 +71,20 @@ export function wotEmoji(level: WotLevel): string {
 export function wotCssColor(level: WotLevel): string {
   switch (level) {
     case "green": return "#4ade80";
-    case "yellow_green": return "#a3e635";
+    case "yellow_green": return "#84cc16";
     case "yellow": return "#fbbf24";
     case "orange": return "#fb923c";
     case "red": return "#ef4444";
+  }
+}
+
+export function formatWotLabel(level: WotLevel): string {
+  switch (level) {
+    case "green": return "5/5 green";
+    case "yellow_green": return "4/5 yellow-green";
+    case "yellow": return "3/5 yellow";
+    case "orange": return "2/5 orange";
+    case "red": return "1/5 red";
   }
 }
 
