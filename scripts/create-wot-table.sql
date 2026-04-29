@@ -1,7 +1,8 @@
 CREATE TABLE IF NOT EXISTS wot_log (
   date date PRIMARY KEY,
   score integer NOT NULL CHECK (score BETWEEN 1 AND 5),
-  color text NOT NULL CHECK (color IN ('green', 'yellow_green', 'yellow', 'orange', 'red')),
+  -- 'deep_red' kept for legacy rows logged before the 5-tier rename.
+  color text NOT NULL CHECK (color IN ('red', 'orange', 'yellow', 'yellow_green', 'green', 'deep_red')),
   legacy_color text,
   created_at timestamptz DEFAULT now()
 );
