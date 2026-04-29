@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { effectiveWotLevel } from "@/lib/wot";
+import { effectiveWotLevel, formatWotLabel } from "@/lib/wot";
 import {
   getEffectiveDate,
   getLast7Days,
@@ -2886,7 +2886,7 @@ export default function Dashboard() {
                           return (
                             <td key={day} className="text-center py-1.5 px-1">
                               {wot ? (
-                                <span className="text-sm" title={`WOT: ${wot.color}`}>
+                                <span className="text-sm" title={`WOT: ${formatWotLabel(effectiveWotLevel(wot))}`}>
                                   {wotEmoji(effectiveWotLevel(wot))}
                                 </span>
                               ) : null}
@@ -2957,7 +2957,7 @@ export default function Dashboard() {
                             <div
                               className="w-[6px] h-[6px] rounded-full mt-0.5"
                               style={{ backgroundColor: wotCssColor(effectiveWotLevel(wot)) }}
-                              title={`WOT: ${effectiveWotLevel(wot)}`}
+                              title={`WOT: ${formatWotLabel(effectiveWotLevel(wot))}`}
                             />
                           );
                         })()}
