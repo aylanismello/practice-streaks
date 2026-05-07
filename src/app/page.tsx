@@ -115,7 +115,7 @@ function StreakBadge({ count }: { count: number }) {
   );
 }
 
-function CelebrationOverlay({ open, onDismiss }: { open: boolean; onDismiss: () => void }) {
+function CelebrationOverlay({ open, onDismiss, totalPractices }: { open: boolean; onDismiss: () => void; totalPractices: number }) {
   const confetti = [
     { left: "10%", delay: "0s", duration: "2.8s", rotate: "18deg", color: "#f472b6" },
     { left: "18%", delay: "0.2s", duration: "3.2s", rotate: "-14deg", color: "#fb7185" },
@@ -155,7 +155,7 @@ function CelebrationOverlay({ open, onDismiss }: { open: boolean; onDismiss: () 
           you&apos;re not a bitch
         </div>
         <div className="text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
-          8 for 8. clean sweep. no notes.
+          {totalPractices} for {totalPractices}. clean sweep. no notes.
         </div>
         <div className="absolute inset-x-0 -top-3 h-10 overflow-hidden">
           {confetti.map((piece, idx) => (
@@ -2061,7 +2061,7 @@ export default function Dashboard() {
     setTogglingId(practiceId);
     try {
       const todayCountBefore = logs.filter((l) => l.practice_date === today).length;
-      const willCompleteEight = !isDone && todayCountBefore === 7;
+      const willCompleteAll = !isDone && practices.length > 0 && todayCountBefore === practices.length - 1;
       if (isDone) {
         await fetch("/api/log", {
           method: "DELETE",
@@ -2085,11 +2085,11 @@ export default function Dashboard() {
         .gte("practice_date", streakStartStr)
         .lte("practice_date", today);
       if (data) setLogs(data);
-      if (willCompleteEight) setCelebrationOpen(true);
+      if (willCompleteAll) setCelebrationOpen(true);
     } finally {
       setTogglingId(null);
     }
-  }, [today, timeOffset, logs]);
+  }, [today, timeOffset, logs, practices.length]);
 
   const fetchChinaData = useCallback(async () => {
     try {
@@ -2416,7 +2416,7 @@ export default function Dashboard() {
 
   return (
     <main className="max-w-[960px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-12">
-      <CelebrationOverlay open={celebrationOpen} onDismiss={() => setCelebrationOpen(false)} />
+      <CelebrationOverlay open={celebrationOpen} onDismiss={() => setCelebrationOpen(false)} totalPractices={practices.length} />
       {/* Flow modal */}
       <FlowTimer
         open={flowOpen}
