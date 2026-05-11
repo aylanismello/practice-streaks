@@ -1,25 +1,15 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
-type PresetName = "ritual" | "oceanic" | "solar storm";
-
-type VisualPreset = {
-  name: PresetName;
-  label: string;
-  bass: number;
-  liquid: number;
-  shimmer: number;
-  bloom: number;
-  gravity: number;
+const DEFAULT_REACTIVITY = {
+  bass: 1.45,
+  liquid: 1.25,
+  shimmer: 1.75,
+  bloom: 1.35,
+  gravity: 0.72,
 };
-
-const PRESETS: VisualPreset[] = [
-  { name: "ritual", label: "ritual glow", bass: 1.15, liquid: 0.9, shimmer: 0.8, bloom: 1.05, gravity: 0.62 },
-  { name: "oceanic", label: "liquid altar", bass: 0.85, liquid: 1.45, shimmer: 0.7, bloom: 0.95, gravity: 0.45 },
-  { name: "solar storm", label: "solar storm", bass: 1.45, liquid: 1.25, shimmer: 1.8, bloom: 1.45, gravity: 0.8 },
-];
 
 const vertexShader = `
 varying vec2 vUv;
@@ -200,7 +190,7 @@ void main() {
   p.x *= uResolution.x / uResolution.y;
 
   float breath = sin(uTime * (0.18 + uEnergy * 0.42)) * 0.5 + 0.5;
-  float beat = pow(clamp(uBass * 1.25 + uBeat * 0.9, 0.0, 2.0), 1.45);
+  float beat = pow(clamp(uBass * 1.55 + uBeat * 1.35, 0.0, 2.4), 1.25);
   vec2 journey = vec2(
     sin(uTime * 0.105) * 0.34 + sin(uTime * 0.037) * 0.2,
     uTime * (0.11 + uEnergy * 0.32)
@@ -212,7 +202,7 @@ void main() {
     fbm(travelP * 1.6 + vec2(-uTime * 0.035, uTime * 0.042))
   ) - 0.5;
   vec2 warped = p + flow * (0.13 + uMids * 0.42 + beat * 0.18) * uLiquid;
-  warped += vec2(sin(p.y * 3.0 + uTime * 0.7), cos(p.x * 2.5 - uTime * 0.55)) * beat * 0.055;
+  warped += vec2(sin(p.y * 3.0 + uTime * 0.7), cos(p.x * 2.5 - uTime * 0.55)) * beat * 0.09;
 
   float dist = length(warped);
   vec3 cream = vec3(0.965, 0.93, 0.855);
@@ -226,14 +216,14 @@ void main() {
   float nebulaB = smoothstep(0.45, 0.9, fbm(travelP * 2.8 - uTime * 0.045));
   color += vec3(0.08, 0.03, 0.22) * nebulaA * (0.1 + uMids * 0.34);
   color += vec3(0.95, 0.28, 0.08) * nebulaB * (0.035 + beat * 0.09);
-  color += vec3(0.18, 0.08, 0.36) * shockwave(p, vec2(0.0), uTime * (0.22 + uEnergy * 0.38), beat + uBeat);
+  color += vec3(1.0, 0.34, 0.08) * shockwave(p, vec2(0.0), uTime * (0.22 + uEnergy * 0.38), beat + uBeat) * 0.7;
 
   float stackBreath = 1.0 + beat * 0.23 + breath * 0.055;
-  vec2 orbit = vec2(sin(uTime * 0.23), cos(uTime * 0.19)) * (0.06 + beat * 0.11 + uEnergy * 0.06);
+  vec2 orbit = vec2(sin(uTime * 0.23), cos(uTime * 0.19)) * (0.08 + beat * 0.18 + uEnergy * 0.08);
   vec2 topCenter = vec2(0.0, 0.205) + orbit + flow * (0.09 + beat * 0.13);
   vec2 bottomCenter = vec2(0.0, -0.24) - orbit * 0.7 + flow.yx * (0.07 + beat * 0.1);
-  float topRadius = (0.39 + beat * 0.105) * stackBreath;
-  float bottomRadius = (0.355 + beat * 0.095) * stackBreath;
+  float topRadius = (0.39 + beat * 0.16) * stackBreath;
+  float bottomRadius = (0.355 + beat * 0.14) * stackBreath;
   float liquidEdge = (fbm(warped * (7.2 + uLiquid * 2.4) + uTime * 0.06) - 0.5) * 0.055 * uLiquid;
 
   float bottomDisc = circleMask(warped, bottomCenter, bottomRadius + liquidEdge, 0.015 + uMids * 0.018);
@@ -322,22 +312,12 @@ export default function SegundoSolVisualizer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [exportMode, setExportMode] = useState<"idle" | "clip" | "full">("idle");
-  const [presetName, setPresetName] = useState<PresetName>("ritual");
-  const [bass, setBass] = useState(1.15);
-  const [liquid, setLiquid] = useState(0.9);
-  const [shimmer, setShimmer] = useState(0.8);
-  const [bloom, setBloom] = useState(1.05);
-  const [gravity, setGravity] = useState(0.62);
-
-  const preset = useMemo(() => PRESETS.find((item) => item.name === presetName) ?? PRESETS[0], [presetName]);
-
-  useEffect(() => {
-    setBass(preset.bass);
-    setLiquid(preset.liquid);
-    setShimmer(preset.shimmer);
-    setBloom(preset.bloom);
-    setGravity(preset.gravity);
-  }, [preset]);
+  const [bass, setBass] = useState(DEFAULT_REACTIVITY.bass);
+  const [liquid, setLiquid] = useState(DEFAULT_REACTIVITY.liquid);
+  const [shimmer, setShimmer] = useState(DEFAULT_REACTIVITY.shimmer);
+  const [bloom, setBloom] = useState(DEFAULT_REACTIVITY.bloom);
+  const [gravity, setGravity] = useState(DEFAULT_REACTIVITY.gravity);
+  const [levels, setLevels] = useState({ bass: 0.12, mids: 0.12, highs: 0.12, energy: 0.12 });
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -370,6 +350,7 @@ export default function SegundoSolVisualizer() {
     scene.add(mesh);
 
     const clock = new THREE.Clock();
+    let lastUiUpdate = 0;
     const smooth = { bass: 0.14, mids: 0.12, highs: 0.1, energy: 0.1, beat: 0.0, lastBass: 0.14 };
     const render = () => {
       const data = dataRef.current;
@@ -403,6 +384,16 @@ export default function SegundoSolVisualizer() {
       uniforms.uLiquid.value = liquid;
       uniforms.uBloom.value = bloom;
       uniforms.uGravity.value = gravity;
+      const elapsed = clock.getElapsedTime();
+      if (elapsed - lastUiUpdate > 0.08) {
+        lastUiUpdate = elapsed;
+        setLevels({
+          bass: Math.min(1, smooth.bass * 1.25 + smooth.beat * 0.45),
+          mids: Math.min(1, smooth.mids * 1.1),
+          highs: Math.min(1, smooth.highs * 1.25),
+          energy: Math.min(1, smooth.energy * 1.15),
+        });
+      }
       renderer.render(scene, camera);
       rafRef.current = requestAnimationFrame(render);
     };
@@ -567,7 +558,7 @@ export default function SegundoSolVisualizer() {
             </div>
             <div className="pointer-events-none absolute bottom-5 left-5 right-5 rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
               <p className="max-w-3xl text-sm text-orange-50/80">
-                twin suns moving through deep indigo space. bass drives the bodies and shockwaves, mids bend the field, highs ignite cinematic stars and particle rivers.
+                bass = sun pulse, mids = liquid waves, highs = star flare. one excellent mode, tuned for obvious reactivity.
               </p>
             </div>
           </div>
@@ -575,9 +566,9 @@ export default function SegundoSolVisualizer() {
           <aside className="w-full rounded-[2rem] border border-orange-100/15 bg-[#090817]/85 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl lg:w-[360px]">
             <div className="mb-5">
               <p className="text-xs uppercase tracking-[0.35em] text-orange-200/55">v1 visualizer</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-orange-50">two suns, breathing</h1>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-orange-50">segundo sol visualizer</h1>
               <p className="mt-3 text-sm leading-6 text-orange-100/62">
-                upload a DJ mix or track and tune the proof of concept live. export a full real-time WebM, capture a shorter clip, or grab a still when the look hits.
+                one tuned mode. upload audio and watch the mapping clearly: bass moves the suns, mids bend the liquid field, highs ignite the stars.
               </p>
             </div>
 
@@ -631,29 +622,44 @@ export default function SegundoSolVisualizer() {
             </div>
             <p className="mb-5 text-xs leading-5 text-orange-100/45">full export renders the whole track from start to finish and downloads automatically at the end. faster-than-realtime export needs the next render pipeline.</p>
 
-            <div className="mb-5 grid grid-cols-3 gap-2">
-              {PRESETS.map((item) => (
-                <button
-                  key={item.name}
-                  onClick={() => setPresetName(item.name)}
-                  className={`rounded-2xl border px-3 py-3 text-xs font-medium transition ${presetName === item.name ? "border-orange-200/70 bg-orange-200/20 text-orange-50" : "border-white/10 bg-white/[0.03] text-orange-100/55 hover:bg-white/[0.07]"}`}
-                >
-                  {item.label}
-                </button>
-              ))}
+            <div className="mb-5 space-y-3 rounded-3xl border border-orange-100/15 bg-black/20 p-4">
+              <AudioMeter label="bass → sun pulse" value={levels.bass} color="from-orange-300 to-rose-500" />
+              <AudioMeter label="mids → liquid waves" value={levels.mids} color="from-cyan-300 to-indigo-400" />
+              <AudioMeter label="highs → star flare" value={levels.highs} color="from-amber-100 to-yellow-300" />
+              <AudioMeter label="energy → speed/bloom" value={levels.energy} color="from-fuchsia-300 to-orange-300" />
             </div>
 
-            <div className="space-y-4">
-              <Slider label="bass sun pulse" value={bass} min={0.25} max={2} onChange={setBass} />
-              <Slider label="liquid wall" value={liquid} min={0.15} max={2} onChange={setLiquid} />
-              <Slider label="star shimmer" value={shimmer} min={0.1} max={2.2} onChange={setShimmer} />
-              <Slider label="solar bloom" value={bloom} min={0.2} max={2} onChange={setBloom} />
-              <Slider label="sun gravity" value={gravity} min={0} max={1.4} onChange={setGravity} />
-            </div>
+            <details className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 text-sm text-orange-100/60">
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.22em] text-orange-100/70">advanced tuning</summary>
+              <div className="mt-4 space-y-4">
+                <Slider label="bass sun pulse" value={bass} min={0.6} max={2.4} onChange={setBass} />
+                <Slider label="liquid waves" value={liquid} min={0.45} max={2.2} onChange={setLiquid} />
+                <Slider label="star flare" value={shimmer} min={0.5} max={2.5} onChange={setShimmer} />
+                <Slider label="cinematic bloom" value={bloom} min={0.5} max={2.1} onChange={setBloom} />
+                <Slider label="journey drift" value={gravity} min={0.15} max={1.4} onChange={setGravity} />
+              </div>
+            </details>
           </aside>
         </div>
       </section>
     </main>
+  );
+}
+
+function AudioMeter({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-orange-100/60">
+        <span>{label}</span>
+        <span>{Math.round(value * 100)}%</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+        <div
+          className={`h-full rounded-full bg-gradient-to-r ${color} shadow-[0_0_18px_rgba(255,170,70,0.35)] transition-[width] duration-75`}
+          style={{ width: `${Math.max(4, value * 100)}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
