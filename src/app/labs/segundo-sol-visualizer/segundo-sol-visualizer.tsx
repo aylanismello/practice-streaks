@@ -159,9 +159,9 @@ vec3 starStreaks(vec2 p, float audio, float bass) {
   vec2 cell = floor(q * vec2(42.0, 78.0));
   vec2 local = fract(q * vec2(42.0, 78.0)) - 0.5;
   float seed = hash(cell);
-  float active = step(0.92 - audio * 0.08 - bass * 0.035 - uBeat * 0.06, seed);
+  float starActive = step(0.92 - audio * 0.08 - bass * 0.035 - uBeat * 0.06, seed);
   float tail = exp(-abs(local.x) * (32.0 - uBeat * 10.0)) * smoothstep(0.52, -0.48, local.y) * exp(-max(local.y, 0.0) * (5.0 - uBeat));
-  return vec3(0.95, 0.62, 0.32) * tail * active * (0.15 + audio * 0.85 + bass * 0.5 + uBeat * 1.2);
+  return vec3(0.95, 0.62, 0.32) * tail * starActive * (0.15 + audio * 0.85 + bass * 0.5 + uBeat * 1.2);
 }
 
 vec3 radialWarpStars(vec2 p, float audio, float bass) {
@@ -177,10 +177,10 @@ vec3 radialWarpStars(vec2 p, float audio, float bass) {
     vec2 cell = floor(sp * scale);
     vec2 local = fract(sp * scale) - 0.5;
     float seed = hash(cell + fi * 22.0);
-    float active = step(0.965 - audio * 0.04 - uBeat * 0.045, seed);
+    float starActive = step(0.965 - audio * 0.04 - uBeat * 0.045, seed);
     float streak = exp(-abs(local.x) * (28.0 - uBeat * 8.0)) * exp(-abs(local.y) * (8.0 - bass * 2.0));
     vec3 tint = mix(vec3(0.52,0.7,1.0), vec3(1.0,0.7,0.38), hash(cell + 4.0));
-    col += tint * streak * active * z * z * (0.04 + audio * 0.22 + uBeat * 0.5);
+    col += tint * streak * starActive * z * z * (0.04 + audio * 0.22 + uBeat * 0.5);
   }
   return col;
 }
