@@ -62,25 +62,38 @@ float noise(vec2 p) {
 float fbm(vec2 p) {
   float v = 0.0;
   float a = 0.5;
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 6; i++) {
     v += a * noise(p);
-    p = mat2(1.62, 1.12, -1.12, 1.62) * p + 0.13;
-    a *= 0.5;
+    p = mat2(1.58, 1.04, -1.04, 1.58) * p + 0.17;
+    a *= 0.52;
   }
   return v;
 }
 
-float sun(vec2 p, vec2 center, float radius, float pulse, float liquid) {
+float circleMask(vec2 p, vec2 center, float radius, float softness) {
+  return smoothstep(radius + softness, radius - softness, length(p - center));
+}
+
+float crescentCut(vec2 p, vec2 center, float radius) {
   vec2 q = p - center;
+  float arc = abs(length(q) - radius);
+  float arcBand = smoothstep(0.028, 0.0, arc);
   float angle = atan(q.y, q.x);
-  float ripple = sin(angle * 9.0 + uTime * (0.8 + uEnergy * 1.6)) * 0.025;
-  ripple += sin(angle * 17.0 - uTime * 1.1) * 0.013;
-  float water = fbm(q * (4.5 + liquid * 3.0) + vec2(uTime * 0.09, -uTime * 0.06));
-  float r = radius + pulse * 0.09 + ripple * liquid + (water - 0.5) * 0.095 * liquid;
-  float d = length(q);
-  float disc = smoothstep(r, r - 0.035, d);
-  float aura = exp(-max(d - r, 0.0) * (4.0 - uBloom * 0.7));
-  return disc * 1.35 + aura * (0.52 + pulse * 0.9);
+  float gate = smoothstep(-1.12, -0.72, angle) * (1.0 - smoothstep(0.1, 0.46, angle));
+  gate *= smoothstep(-0.24, 0.04, q.x) * (1.0 - smoothstep(0.56, 0.78, q.x));
+  return arcBand * gate;
+}
+
+vec3 watercolor(vec2 p, vec2 center, vec3 hot, vec3 cool, float seed, float audio) {
+  vec2 q = p - center;
+  float paper = fbm(q * 7.5 + seed + vec2(uTime * 0.035, -uTime * 0.022));
+  float bloom = fbm(q * 2.7 + seed * 2.0 - uTime * 0.03);
+  float vertical = smoothstep(-0.42, 0.44, q.y + (bloom - 0.5) * 0.25);
+  vec3 col = mix(cool, hot, vertical);
+  col += vec3(1.0, 0.36, 0.02) * smoothstep(0.55, 0.98, bloom) * 0.25;
+  col += vec3(1.0, 0.84, 0.28) * smoothstep(0.62, 1.0, paper) * (0.11 + audio * 0.15);
+  col *= 0.78 + paper * 0.3;
+  return col;
 }
 
 void main() {
@@ -88,47 +101,61 @@ void main() {
   vec2 p = (uv * 2.0 - 1.0);
   p.x *= uResolution.x / uResolution.y;
 
-  float breath = sin(uTime * (0.22 + uEnergy * 0.5)) * 0.5 + 0.5;
+  float breath = sin(uTime * (0.18 + uEnergy * 0.42)) * 0.5 + 0.5;
   vec2 flow = vec2(
-    fbm(p * 1.4 + vec2(uTime * 0.035, uTime * 0.018)),
-    fbm(p * 1.7 + vec2(-uTime * 0.024, uTime * 0.03))
+    fbm(p * 1.25 + vec2(uTime * 0.03, uTime * 0.016)),
+    fbm(p * 1.6 + vec2(-uTime * 0.02, uTime * 0.027))
   ) - 0.5;
-  vec2 warped = p + flow * (0.11 + uMids * 0.31) * uLiquid;
+  vec2 warped = p + flow * (0.08 + uMids * 0.27) * uLiquid;
 
   float dist = length(warped);
-  vec3 indigo = vec3(0.015, 0.018, 0.075);
-  vec3 deep = vec3(0.002, 0.006, 0.025);
-  vec3 color = mix(indigo, deep, smoothstep(0.0, 1.35, dist));
+  vec3 cream = vec3(0.965, 0.93, 0.855);
+  vec3 indigo = vec3(0.012, 0.016, 0.068);
+  vec3 deep = vec3(0.002, 0.004, 0.02);
+  vec3 color = mix(indigo, deep, smoothstep(0.0, 1.45, dist));
 
-  float nebula = fbm(warped * 2.2 + uTime * 0.025);
-  float veil = smoothstep(0.34, 0.82, nebula) * (0.08 + uMids * 0.24);
-  color += vec3(0.11, 0.035, 0.22) * veil;
-  color += vec3(0.95, 0.42, 0.09) * pow(max(0.0, 1.0 - dist), 3.2) * 0.12 * (0.6 + breath);
+  float paperField = fbm(warped * 3.0 + uTime * 0.018);
+  color = mix(color, cream * (0.82 + paperField * 0.13), 0.07 + uBloom * 0.025);
+  color += vec3(0.1, 0.035, 0.2) * smoothstep(0.35, 0.86, fbm(warped * 2.1 - uTime * 0.02)) * (0.08 + uMids * 0.18);
 
-  float separation = 0.34 + uGravity * 0.08 + sin(uTime * 0.13) * 0.025;
-  float leftSun = sun(warped, vec2(-separation, 0.06 + flow.x * 0.045), 0.22, uBass, uLiquid);
-  float rightSun = sun(warped, vec2(separation, -0.02 + flow.y * 0.045), 0.195, uBass * 0.92, uLiquid);
-  float bridge = exp(-abs(warped.y + sin(warped.x * 4.0 + uTime * 0.45) * 0.075) * 7.5) * exp(-abs(warped.x) * 1.7);
-  bridge *= (0.12 + uEnergy * 0.38) * uLiquid;
+  float stackBreath = 1.0 + uBass * 0.12 + breath * 0.035;
+  vec2 topCenter = vec2(0.0 + flow.x * 0.035, 0.205 + flow.y * 0.025);
+  vec2 bottomCenter = vec2(0.0 - flow.y * 0.025, -0.24 + flow.x * 0.025);
+  float topRadius = (0.39 + uBass * 0.055) * stackBreath;
+  float bottomRadius = (0.355 + uBass * 0.045) * stackBreath;
+  float liquidEdge = (fbm(warped * (7.2 + uLiquid * 2.4) + uTime * 0.06) - 0.5) * 0.055 * uLiquid;
 
-  vec3 gold = vec3(1.0, 0.52, 0.13);
-  vec3 amber = vec3(1.0, 0.78, 0.27);
-  vec3 coral = vec3(0.95, 0.2, 0.08);
-  color += gold * leftSun * (0.62 + uBloom * 0.3);
-  color += amber * rightSun * (0.58 + uBloom * 0.35);
-  color += mix(coral, amber, breath) * bridge;
+  float bottomDisc = circleMask(warped, bottomCenter, bottomRadius + liquidEdge, 0.015 + uMids * 0.018);
+  float topDisc = circleMask(warped, topCenter, topRadius + liquidEdge * 0.9, 0.015 + uMids * 0.018);
+  vec3 bottomColor = watercolor(warped, bottomCenter, vec3(1.0, 0.27, 0.20), vec3(0.84, 0.14, 0.92), 4.2, uMids);
+  vec3 topColor = watercolor(warped, topCenter, vec3(1.0, 0.70, 0.08), vec3(1.0, 0.22, 0.08), 1.7, uBass);
 
-  float rings = sin((length(warped) - uTime * (0.04 + uEnergy * 0.11)) * 32.0 + fbm(warped * 5.0) * 6.0);
-  color += vec3(0.9, 0.38, 0.08) * smoothstep(0.77, 1.0, rings) * 0.035 * uLiquid * (0.4 + uMids);
+  float lowerAura = exp(-max(length(warped - bottomCenter) - bottomRadius, 0.0) * 7.5) * 0.32;
+  float upperAura = exp(-max(length(warped - topCenter) - topRadius, 0.0) * 7.2) * 0.38;
+  color += vec3(1.0, 0.25, 0.78) * lowerAura * (0.32 + uBloom * 0.28);
+  color += vec3(1.0, 0.52, 0.05) * upperAura * (0.36 + uBloom * 0.34);
+  color = mix(color, bottomColor, bottomDisc * 0.94);
+  color = mix(color, topColor, topDisc * 0.96);
 
-  vec2 starGrid = floor((uv + flow * 0.035) * vec2(150.0, 92.0));
+  float overlap = topDisc * bottomDisc;
+  color += vec3(1.0, 0.2, 0.04) * overlap * (0.18 + uBass * 0.18);
+
+  float cut = crescentCut(warped + vec2(0.015, -0.005), vec2(0.17, 0.11), 0.31 + uBass * 0.025);
+  vec3 cutColor = mix(cream, vec3(1.0, 0.92, 0.73), 0.35 + paperField * 0.3);
+  color = mix(color, cutColor, cut * 0.92);
+  color += vec3(1.0, 0.62, 0.2) * smoothstep(0.18, 0.0, abs(length(warped - vec2(0.17, 0.11)) - 0.31)) * cut * 0.25;
+
+  float rings = sin((length(warped - vec2(0.0, -0.02)) - uTime * (0.035 + uEnergy * 0.09)) * 34.0 + fbm(warped * 5.2) * 6.0);
+  color += vec3(1.0, 0.32, 0.08) * smoothstep(0.79, 1.0, rings) * 0.045 * uLiquid * (0.35 + uMids) * (topDisc + bottomDisc + 0.22);
+
+  vec2 starGrid = floor((uv + flow * 0.035) * vec2(155.0, 95.0));
   float star = step(0.988 - uHighs * 0.012, hash(starGrid));
-  float twinkle = pow(hash(starGrid + floor(uTime * (1.5 + uEnergy * 5.0))), 9.0);
-  color += vec3(0.96, 0.82, 0.48) * star * (0.15 + twinkle * (0.85 + uHighs * 2.2)) * (0.55 + uHighs * uBloom);
+  float twinkle = pow(hash(starGrid + floor(uTime * (1.4 + uEnergy * 5.0))), 9.0);
+  color += vec3(0.98, 0.82, 0.52) * star * (0.12 + twinkle * (0.75 + uHighs * 2.2)) * (0.52 + uHighs * uBloom);
 
-  float vignette = smoothstep(1.55, 0.22, length(p));
-  color *= 0.55 + vignette * (0.62 + uEnergy * 0.25);
-  color = pow(color, vec3(0.82));
+  float vignette = smoothstep(1.58, 0.18, length(p));
+  color *= 0.58 + vignette * (0.65 + uEnergy * 0.22);
+  color = pow(color, vec3(0.86));
   gl_FragColor = vec4(color, 1.0);
 }
 `;
@@ -146,10 +173,15 @@ export default function SegundoSolVisualizer() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const recordingDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const rafRef = useRef<number | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
   const [fileName, setFileName] = useState("drop a mix or audio file");
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [presetName, setPresetName] = useState<PresetName>("ritual");
   const [bass, setBass] = useState(1.15);
   const [liquid, setLiquid] = useState(0.9);
@@ -172,7 +204,8 @@ export default function SegundoSolVisualizer() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance", preserveDrawingBuffer: true });
+    rendererRef.current = renderer;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
     mountRef.current.appendChild(renderer.domElement);
@@ -242,6 +275,7 @@ export default function SegundoSolVisualizer() {
       mesh.geometry.dispose();
       mesh.material.dispose();
       renderer.dispose();
+      rendererRef.current = null;
       renderer.domElement.remove();
     };
   }, [bass, liquid, shimmer, bloom, gravity]);
@@ -258,11 +292,19 @@ export default function SegundoSolVisualizer() {
       analyser.fftSize = 1024;
       analyser.smoothingTimeConstant = 0.72;
       const source = context.createMediaElementSource(audio);
+      const recordingDestination = context.createMediaStreamDestination();
       source.connect(analyser);
       analyser.connect(context.destination);
+      analyser.connect(recordingDestination);
+      recordingDestinationRef.current = recordingDestination;
       sourceRef.current = source;
       analyserRef.current = analyser;
       dataRef.current = new Uint8Array(analyser.frequencyBinCount);
+    }
+    if (!recordingDestinationRef.current) {
+      const recordingDestination = context.createMediaStreamDestination();
+      analyserRef.current?.connect(recordingDestination);
+      recordingDestinationRef.current = recordingDestination;
     }
     if (context.state === "suspended") await context.resume();
   };
@@ -283,6 +325,53 @@ export default function SegundoSolVisualizer() {
 
   const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
     loadFile(event.target.files?.[0]);
+  };
+
+
+  const downloadStill = () => {
+    const canvas = rendererRef.current?.domElement;
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `segundo-sol-${Date.now()}.png`;
+    link.click();
+  };
+
+  const toggleRecording = async () => {
+    const canvas = rendererRef.current?.domElement;
+    if (!canvas) return;
+
+    if (recorderRef.current && recorderRef.current.state === "recording") {
+      recorderRef.current.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    await ensureAudioGraph();
+    const canvasStream = canvas.captureStream(30);
+    const audioTracks = recordingDestinationRef.current?.stream.getAudioTracks() ?? [];
+    const stream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+      ? "video/webm;codecs=vp9,opus"
+      : "video/webm";
+    recordedChunksRef.current = [];
+    const recorder = new MediaRecorder(stream, { mimeType });
+    recorderRef.current = recorder;
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) recordedChunksRef.current.push(event.data);
+    };
+    recorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `segundo-sol-render-${Date.now()}.webm`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setIsRecording(false);
+    };
+    recorder.start(1000);
+    setIsRecording(true);
   };
 
   const togglePlay = async () => {
@@ -321,7 +410,7 @@ export default function SegundoSolVisualizer() {
               <p className="text-xs uppercase tracking-[0.35em] text-orange-200/55">v1 visualizer</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-orange-50">two suns, breathing</h1>
               <p className="mt-3 text-sm leading-6 text-orange-100/62">
-                upload a DJ mix or track and tune the proof of concept live. this is preview-only for now — no export pipeline yet.
+                upload a DJ mix or track and tune the proof of concept live. record a WebM preview or grab a still when the look hits.
               </p>
             </div>
 
@@ -342,6 +431,21 @@ export default function SegundoSolVisualizer() {
             >
               {isPlaying ? "pause visualizer" : "play / connect audio"}
             </button>
+
+            <div className="mb-5 grid grid-cols-2 gap-2">
+              <button
+                onClick={toggleRecording}
+                className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${isRecording ? "border-rose-200/80 bg-rose-400/25 text-rose-50" : "border-orange-200/30 bg-white/[0.04] text-orange-50 hover:bg-white/[0.08]"}`}
+              >
+                {isRecording ? "stop + download WebM" : "record WebM"}
+              </button>
+              <button
+                onClick={downloadStill}
+                className="rounded-2xl border border-orange-200/30 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-orange-50 transition hover:bg-white/[0.08]"
+              >
+                download PNG
+              </button>
+            </div>
 
             <div className="mb-5 grid grid-cols-3 gap-2">
               {PRESETS.map((item) => (
