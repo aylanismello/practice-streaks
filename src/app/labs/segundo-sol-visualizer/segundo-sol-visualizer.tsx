@@ -186,10 +186,10 @@ void main() {
   float breath = sin(uTime * (0.18 + uEnergy * 0.42)) * 0.5 + 0.5;
   float beat = pow(clamp(uBass * 1.05 + uBeat * 0.95, 0.0, 1.45), 1.28);
   vec2 journey = vec2(
-    sin(uTime * 0.105) * 0.34 + sin(uTime * 0.037) * 0.2,
-    uTime * (0.11 + uEnergy * 0.32)
+    sin(uTime * 0.075) * 0.18 + sin(uTime * 0.031) * 0.08,
+    uTime * (0.055 + uEnergy * 0.16)
   );
-  vec2 cameraDrift = vec2(sin(uTime * 0.071), cos(uTime * 0.053)) * (0.1 + uEnergy * 0.24);
+  vec2 cameraDrift = vec2(sin(uTime * 0.071), cos(uTime * 0.053)) * (0.045 + uEnergy * 0.08);
   vec2 travelP = p + journey + cameraDrift;
   vec2 flow = vec2(
     fbm(travelP * 1.25 + vec2(uTime * 0.05, uTime * 0.02)),
@@ -268,8 +268,8 @@ void main() {
   stars += radialWarpStars(p + flow * 0.25, uHighs + uEnergy * 0.35, beat);
   float starOcclusion = 1.0 - clamp((topDisc + bottomDisc) * 0.85, 0.0, 0.85);
   color += stars * starOcclusion * (0.56 + uBloom * 0.28);
-  color += vec3(1.0, 0.58, 0.2) * riverA * (0.16 + uHighs * 0.75 + beat * 0.25);
-  color += vec3(0.86, 0.22, 1.0) * riverB * (0.12 + uHighs * 0.62 + uMids * 0.18);
+  color += vec3(1.0, 0.58, 0.2) * riverA * (0.08 + uHighs * 0.42 + beat * 0.12);
+  color += vec3(0.86, 0.22, 1.0) * riverB * (0.06 + uHighs * 0.34 + uMids * 0.1);
   color += vec3(0.45, 0.7, 1.0) * dust * (0.05 + uEnergy * 0.18);
 
   float vignette = smoothstep(1.58, 0.18, length(p));
@@ -313,8 +313,13 @@ export default function SegundoSolVisualizer() {
   const [isRecording, setIsRecording] = useState(false);
   const [exportMode, setExportMode] = useState<"idle" | "clip" | "full">("idle");
   const [sensitivity, setSensitivity] = useState(DEFAULT_SENSITIVITY);
-  const [levels, setLevels] = useState({ bass: 0.12, mids: 0.12, highs: 0.12, energy: 0.12 });
+  const sensitivityRef = useRef(DEFAULT_SENSITIVITY);
+  const [levels, setLevels] = useState({ bass: 0, mids: 0, highs: 0, energy: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    sensitivityRef.current = sensitivity;
+  }, [sensitivity]);
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -324,13 +329,6 @@ export default function SegundoSolVisualizer() {
 
   useEffect(() => {
     if (!mountRef.current) return;
-
-    const reaction = sensitivity / 55;
-    const bass = 0.85 + reaction * 0.55;
-    const liquid = 0.75 + reaction * 0.45;
-    const shimmer = 0.9 + reaction * 0.65;
-    const bloom = 0.9 + reaction * 0.38;
-    const gravity = 0.45 + reaction * 0.22;
 
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -348,9 +346,9 @@ export default function SegundoSolVisualizer() {
       uHighs: { value: 0.1 },
       uEnergy: { value: 0.1 },
       uBeat: { value: 0.0 },
-      uLiquid: { value: liquid },
-      uBloom: { value: bloom },
-      uGravity: { value: gravity },
+      uLiquid: { value: 0.85 },
+      uBloom: { value: 0.9 },
+      uGravity: { value: 0.5 },
     };
 
     const mesh = new THREE.Mesh(
@@ -375,13 +373,18 @@ export default function SegundoSolVisualizer() {
         stats.midsPeak = Math.max(midsAvg, stats.midsPeak * 0.995);
         stats.highsPeak = Math.max(highsAvg, stats.highsPeak * 0.996);
         stats.energyPeak = Math.max(energyAvg, stats.energyPeak * 0.995);
-        const rawBass = compressAudioLevel(bassAvg, 0.025, stats.bassPeak * 0.9, 0.62) * bass * 0.72;
-        const rawMids = compressAudioLevel(midsAvg, 0.02, stats.midsPeak * 0.92, 0.78) * liquid * 0.62;
-        const rawHighs = compressAudioLevel(highsAvg, 0.015, stats.highsPeak * 0.9, 0.7) * shimmer * 0.58;
-        const rawEnergy = compressAudioLevel(energyAvg, 0.025, stats.energyPeak * 0.94, 0.82) * ((bass + liquid + shimmer) / 3) * 0.58;
-        const transient = Math.max(0, rawBass - smooth.lastBass - 0.08);
+        const sensitivityGain = Math.pow(Math.max(0, sensitivityRef.current) / 100, 1.35);
+        const bassNorm = compressAudioLevel(bassAvg, 0.035, stats.bassPeak * 1.05, 0.78);
+        const midsNorm = compressAudioLevel(midsAvg, 0.03, stats.midsPeak * 1.08, 0.9);
+        const highsNorm = compressAudioLevel(highsAvg, 0.025, stats.highsPeak * 1.06, 0.82);
+        const energyNorm = compressAudioLevel(energyAvg, 0.035, stats.energyPeak * 1.08, 0.92);
+        const rawBass = bassNorm * sensitivityGain * 0.78;
+        const rawMids = midsNorm * sensitivityGain * 0.58;
+        const rawHighs = highsNorm * sensitivityGain * 0.66;
+        const rawEnergy = energyNorm * sensitivityGain * 0.54;
+        const transient = Math.max(0, rawBass - smooth.lastBass - 0.11);
         smooth.lastBass += (rawBass - smooth.lastBass) * 0.06;
-        smooth.beat = Math.max(Math.min(0.65, transient * 2.9), smooth.beat * 0.82);
+        smooth.beat = Math.max(Math.min(0.45, transient * 1.75), smooth.beat * 0.8);
         smooth.bass += (rawBass - smooth.bass) * 0.12;
         smooth.mids += (rawMids - smooth.mids) * 0.1;
         smooth.highs += (rawHighs - smooth.highs) * 0.17;
@@ -400,17 +403,18 @@ export default function SegundoSolVisualizer() {
       uniforms.uHighs.value = Math.min(1.05, smooth.highs);
       uniforms.uEnergy.value = Math.min(0.9, smooth.energy);
       uniforms.uBeat.value = Math.min(0.65, smooth.beat);
-      uniforms.uLiquid.value = liquid;
-      uniforms.uBloom.value = bloom;
-      uniforms.uGravity.value = gravity;
+      const sensitivityGain = Math.pow(Math.max(0, sensitivityRef.current) / 100, 1.35);
+      uniforms.uLiquid.value = 0.45 + sensitivityGain * 0.85;
+      uniforms.uBloom.value = 0.65 + sensitivityGain * 0.55;
+      uniforms.uGravity.value = 0.35 + sensitivityGain * 0.45;
       const elapsed = clock.getElapsedTime();
       if (elapsed - lastUiUpdate > 0.08) {
         lastUiUpdate = elapsed;
         setLevels({
-          bass: Math.min(1, smooth.bass * 1.25 + smooth.beat * 0.45),
-          mids: Math.min(1, smooth.mids * 1.1),
-          highs: Math.min(1, smooth.highs * 1.25),
-          energy: Math.min(1, smooth.energy * 1.15),
+          bass: Math.min(1, (smooth.bass * 1.25 + smooth.beat * 0.45)),
+          mids: Math.min(1, smooth.mids * 1.35),
+          highs: Math.min(1, smooth.highs * 1.35),
+          energy: Math.min(1, smooth.energy * 1.25),
         });
       }
       renderer.render(scene, camera);
@@ -434,7 +438,7 @@ export default function SegundoSolVisualizer() {
       rendererRef.current = null;
       renderer.domElement.remove();
     };
-  }, [sensitivity]);
+  }, []);
 
   const ensureAudioGraph = async () => {
     const audio = audioRef.current;
