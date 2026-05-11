@@ -3,13 +3,7 @@
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
-const DEFAULT_REACTIVITY = {
-  bass: 1.45,
-  liquid: 1.25,
-  shimmer: 1.75,
-  bloom: 1.35,
-  gravity: 0.72,
-};
+const DEFAULT_SENSITIVITY = 55;
 
 const vertexShader = `
 varying vec2 vUv;
@@ -318,11 +312,7 @@ export default function SegundoSolVisualizer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [exportMode, setExportMode] = useState<"idle" | "clip" | "full">("idle");
-  const [bass, setBass] = useState(DEFAULT_REACTIVITY.bass);
-  const [liquid, setLiquid] = useState(DEFAULT_REACTIVITY.liquid);
-  const [shimmer, setShimmer] = useState(DEFAULT_REACTIVITY.shimmer);
-  const [bloom, setBloom] = useState(DEFAULT_REACTIVITY.bloom);
-  const [gravity, setGravity] = useState(DEFAULT_REACTIVITY.gravity);
+  const [sensitivity, setSensitivity] = useState(DEFAULT_SENSITIVITY);
   const [levels, setLevels] = useState({ bass: 0.12, mids: 0.12, highs: 0.12, energy: 0.12 });
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -334,6 +324,13 @@ export default function SegundoSolVisualizer() {
 
   useEffect(() => {
     if (!mountRef.current) return;
+
+    const reaction = sensitivity / 55;
+    const bass = 0.85 + reaction * 0.55;
+    const liquid = 0.75 + reaction * 0.45;
+    const shimmer = 0.9 + reaction * 0.65;
+    const bloom = 0.9 + reaction * 0.38;
+    const gravity = 0.45 + reaction * 0.22;
 
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -437,7 +434,7 @@ export default function SegundoSolVisualizer() {
       rendererRef.current = null;
       renderer.domElement.remove();
     };
-  }, [bass, liquid, shimmer, bloom, gravity]);
+  }, [sensitivity]);
 
   const ensureAudioGraph = async () => {
     const audio = audioRef.current;
@@ -597,7 +594,7 @@ export default function SegundoSolVisualizer() {
             </div>
             <div className="pointer-events-none absolute bottom-5 left-5 right-5 rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
               <p className="max-w-3xl text-sm text-orange-50/80">
-                bass = sun pulse, mids = liquid waves, highs = star flare. one excellent mode, tuned for obvious reactivity.
+                one-mode visualizer. use the sensitivity number as the feedback loop so we can tune it precisely.
               </p>
             </div>
           </div>
@@ -607,7 +604,7 @@ export default function SegundoSolVisualizer() {
               <p className="text-xs uppercase tracking-[0.35em] text-orange-200/55">v1 visualizer</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-orange-50">segundo sol visualizer</h1>
               <p className="mt-3 text-sm leading-6 text-orange-100/62">
-                one tuned mode. upload audio and watch the mapping clearly: bass moves the suns, mids bend the liquid field, highs ignite the stars.
+                one knob for the whole system. set sensitivity, play audio, then tell me the number that feels closest.
               </p>
             </div>
 
@@ -661,23 +658,29 @@ export default function SegundoSolVisualizer() {
             </div>
             <p className="mb-5 text-xs leading-5 text-orange-100/45">preview/export frame is locked to 16:9 for DaVinci/Magic Mask use. audio is adaptively normalized for loud mastered tracks, so it should react without blowing out.</p>
 
-            <div className="mb-5 space-y-3 rounded-3xl border border-orange-100/15 bg-black/20 p-4">
-              <AudioMeter label="bass → sun pulse" value={levels.bass} color="from-orange-300 to-rose-500" />
-              <AudioMeter label="mids → liquid waves" value={levels.mids} color="from-cyan-300 to-indigo-400" />
-              <AudioMeter label="highs → star flare" value={levels.highs} color="from-amber-100 to-yellow-300" />
-              <AudioMeter label="energy → speed/bloom" value={levels.energy} color="from-fuchsia-300 to-orange-300" />
-            </div>
-
-            <details className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 text-sm text-orange-100/60">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.22em] text-orange-100/70">advanced tuning</summary>
-              <div className="mt-4 space-y-4">
-                <Slider label="bass sun pulse" value={bass} min={0.6} max={2.4} onChange={setBass} />
-                <Slider label="liquid waves" value={liquid} min={0.45} max={2.2} onChange={setLiquid} />
-                <Slider label="star flare" value={shimmer} min={0.5} max={2.5} onChange={setShimmer} />
-                <Slider label="cinematic bloom" value={bloom} min={0.5} max={2.1} onChange={setBloom} />
-                <Slider label="journey drift" value={gravity} min={0.15} max={1.4} onChange={setGravity} />
+            <div className="rounded-3xl border border-orange-100/15 bg-black/20 p-4">
+              <div className="mb-3 flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-100/60">reaction sensitivity</p>
+                  <p className="mt-1 text-sm text-orange-100/45">tell me this number when it feels wrong/right</p>
+                </div>
+                <div className="text-4xl font-semibold tabular-nums text-orange-50">{sensitivity}</div>
               </div>
-            </details>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={sensitivity}
+                onChange={(event) => setSensitivity(Number(event.target.value))}
+                className="h-3 w-full accent-orange-300"
+              />
+              <div className="mt-4 space-y-2">
+                <AudioMeter label="bass / sun" value={levels.bass} color="from-orange-300 to-rose-500" />
+                <AudioMeter label="mids / liquid" value={levels.mids} color="from-cyan-300 to-indigo-400" />
+                <AudioMeter label="highs / stars" value={levels.highs} color="from-amber-100 to-yellow-300" />
+              </div>
+            </div>
           </aside>
         </div>
       </section>
