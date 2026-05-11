@@ -37,6 +37,7 @@ uniform float uBass;
 uniform float uMids;
 uniform float uHighs;
 uniform float uEnergy;
+uniform float uBeat;
 uniform float uLiquid;
 uniform float uBloom;
 uniform float uGravity;
@@ -153,14 +154,44 @@ vec3 cinematicStars(vec2 p, float layer, float scale, float threshold, float spe
 
 vec3 starStreaks(vec2 p, float audio, float bass) {
   vec2 q = p;
-  q.y += uTime * (0.22 + audio * 0.9 + bass * 0.65);
+  q.y += uTime * (0.22 + audio * 0.9 + bass * 0.65 + uBeat * 1.4);
   q.x += sin(q.y * 2.0 + uTime * 0.5) * 0.12;
   vec2 cell = floor(q * vec2(42.0, 78.0));
   vec2 local = fract(q * vec2(42.0, 78.0)) - 0.5;
   float seed = hash(cell);
-  float active = step(0.92 - audio * 0.08 - bass * 0.035, seed);
-  float tail = exp(-abs(local.x) * 38.0) * smoothstep(0.48, -0.45, local.y) * exp(-max(local.y, 0.0) * 6.0);
-  return vec3(0.95, 0.62, 0.32) * tail * active * (0.15 + audio * 0.85 + bass * 0.5);
+  float active = step(0.92 - audio * 0.08 - bass * 0.035 - uBeat * 0.06, seed);
+  float tail = exp(-abs(local.x) * (32.0 - uBeat * 10.0)) * smoothstep(0.52, -0.48, local.y) * exp(-max(local.y, 0.0) * (5.0 - uBeat));
+  return vec3(0.95, 0.62, 0.32) * tail * active * (0.15 + audio * 0.85 + bass * 0.5 + uBeat * 1.2);
+}
+
+vec3 radialWarpStars(vec2 p, float audio, float bass) {
+  vec2 polar = p;
+  float angle = atan(polar.y, polar.x);
+  float radius = length(polar) + 0.001;
+  vec3 col = vec3(0.0);
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float z = fract(uTime * (0.055 + audio * 0.09 + bass * 0.08) + fi * 0.31 + radius * 0.22);
+    float scale = mix(18.0, 80.0, z);
+    vec2 sp = vec2(angle / 6.28318, 1.0 / radius + z * 2.2);
+    vec2 cell = floor(sp * scale);
+    vec2 local = fract(sp * scale) - 0.5;
+    float seed = hash(cell + fi * 22.0);
+    float active = step(0.965 - audio * 0.04 - uBeat * 0.045, seed);
+    float streak = exp(-abs(local.x) * (28.0 - uBeat * 8.0)) * exp(-abs(local.y) * (8.0 - bass * 2.0));
+    vec3 tint = mix(vec3(0.52,0.7,1.0), vec3(1.0,0.7,0.38), hash(cell + 4.0));
+    col += tint * streak * active * z * z * (0.04 + audio * 0.22 + uBeat * 0.5);
+  }
+  return col;
+}
+
+vec3 lensBloom(vec2 p, vec2 center, float strength, vec3 tint) {
+  vec2 q = p - center;
+  float d = length(q);
+  float glow = exp(-d * (2.2 - strength * 0.35));
+  float ring = smoothstep(0.03, 0.0, abs(d - (0.48 + strength * 0.08))) * 0.18;
+  float flare = exp(-abs(q.y) * 34.0) * exp(-abs(q.x) * 2.2) * 0.1;
+  return tint * (glow * 0.18 + ring + flare) * strength;
 }
 
 void main() {
@@ -169,7 +200,7 @@ void main() {
   p.x *= uResolution.x / uResolution.y;
 
   float breath = sin(uTime * (0.18 + uEnergy * 0.42)) * 0.5 + 0.5;
-  float beat = pow(clamp(uBass * 1.25, 0.0, 1.8), 1.55);
+  float beat = pow(clamp(uBass * 1.25 + uBeat * 0.9, 0.0, 2.0), 1.45);
   vec2 journey = vec2(
     sin(uTime * 0.105) * 0.34 + sin(uTime * 0.037) * 0.2,
     uTime * (0.11 + uEnergy * 0.32)
@@ -195,7 +226,7 @@ void main() {
   float nebulaB = smoothstep(0.45, 0.9, fbm(travelP * 2.8 - uTime * 0.045));
   color += vec3(0.08, 0.03, 0.22) * nebulaA * (0.1 + uMids * 0.34);
   color += vec3(0.95, 0.28, 0.08) * nebulaB * (0.035 + beat * 0.09);
-  color += vec3(0.18, 0.08, 0.36) * shockwave(p, vec2(0.0), uTime * (0.22 + uEnergy * 0.38), beat);
+  color += vec3(0.18, 0.08, 0.36) * shockwave(p, vec2(0.0), uTime * (0.22 + uEnergy * 0.38), beat + uBeat);
 
   float stackBreath = 1.0 + beat * 0.23 + breath * 0.055;
   vec2 orbit = vec2(sin(uTime * 0.23), cos(uTime * 0.19)) * (0.06 + beat * 0.11 + uEnergy * 0.06);
@@ -218,8 +249,10 @@ void main() {
 
   float lowerAura = exp(-max(length(warped - bottomCenter) - bottomRadius, 0.0) * 7.5) * 0.32;
   float upperAura = exp(-max(length(warped - topCenter) - topRadius, 0.0) * 7.2) * 0.38;
-  color += vec3(1.0, 0.25, 0.78) * lowerAura * (0.32 + uBloom * 0.28);
-  color += vec3(1.0, 0.52, 0.05) * upperAura * (0.36 + uBloom * 0.34);
+  color += vec3(1.0, 0.25, 0.78) * lowerAura * (0.32 + uBloom * 0.28 + uBeat * 0.35);
+  color += vec3(1.0, 0.52, 0.05) * upperAura * (0.36 + uBloom * 0.34 + uBeat * 0.42);
+  color += lensBloom(p, topCenter, 0.85 + beat * 0.7 + uBeat, vec3(1.0, 0.55, 0.12));
+  color += lensBloom(p, bottomCenter, 0.65 + beat * 0.55 + uBeat * 0.8, vec3(1.0, 0.22, 0.78));
   color = mix(color, bottomColor, bottomDisc * 0.94);
   color = mix(color, topColor, topDisc * 0.96);
 
@@ -248,6 +281,7 @@ void main() {
   stars += cinematicStars(starSpace * 1.15 + vec2(3.1, -1.8), 2.0, 48.0, 0.982, 0.075 + uEnergy * 0.18, uHighs * 1.25 + beat * 0.25);
   stars += cinematicStars(starSpace * 1.9 - vec2(2.4, 4.2), 3.0, 76.0, 0.991, 0.13 + uEnergy * 0.27, uHighs * 1.65 + beat * 0.18);
   stars += starStreaks(starSpace + flow * 0.4, uHighs + uEnergy * 0.4, beat);
+  stars += radialWarpStars(p + flow * 0.25, uHighs + uEnergy * 0.35, beat);
   float starOcclusion = 1.0 - clamp((topDisc + bottomDisc) * 0.85, 0.0, 0.85);
   color += stars * starOcclusion * (0.56 + uBloom * 0.28);
   color += vec3(1.0, 0.58, 0.2) * riverA * (0.16 + uHighs * 0.75 + beat * 0.25);
@@ -256,7 +290,11 @@ void main() {
 
   float vignette = smoothstep(1.58, 0.18, length(p));
   color *= 0.58 + vignette * (0.65 + uEnergy * 0.22);
-  color = pow(color, vec3(0.86));
+  float grain = hash(floor(uv * uResolution.xy) + floor(uTime * 24.0));
+  color += (grain - 0.5) * 0.025;
+  color += vec3(0.035, 0.012, 0.0) * smoothstep(0.4, 1.45, length(p)) * (uBloom + uEnergy);
+  color = color / (color + vec3(0.82));
+  color = pow(color, vec3(0.78));
   gl_FragColor = vec4(color, 1.0);
 }
 `;
@@ -319,6 +357,7 @@ export default function SegundoSolVisualizer() {
       uMids: { value: 0.12 },
       uHighs: { value: 0.1 },
       uEnergy: { value: 0.1 },
+      uBeat: { value: 0.0 },
       uLiquid: { value: liquid },
       uBloom: { value: bloom },
       uGravity: { value: gravity },
@@ -331,7 +370,7 @@ export default function SegundoSolVisualizer() {
     scene.add(mesh);
 
     const clock = new THREE.Clock();
-    const smooth = { bass: 0.14, mids: 0.12, highs: 0.1, energy: 0.1 };
+    const smooth = { bass: 0.14, mids: 0.12, highs: 0.1, energy: 0.1, beat: 0.0, lastBass: 0.14 };
     const render = () => {
       const data = dataRef.current;
       if (analyserRef.current && data) {
@@ -340,6 +379,9 @@ export default function SegundoSolVisualizer() {
         const rawMids = averageRange(data, 14, 104) * liquid;
         const rawHighs = averageRange(data, 104, 255) * shimmer;
         const rawEnergy = averageRange(data, 1, 220) * ((bass + liquid + shimmer) / 3);
+        const transient = Math.max(0, rawBass - smooth.lastBass - 0.035);
+        smooth.lastBass += (rawBass - smooth.lastBass) * 0.08;
+        smooth.beat = Math.max(transient * 5.5, smooth.beat * 0.86);
         smooth.bass += (rawBass - smooth.bass) * 0.16;
         smooth.mids += (rawMids - smooth.mids) * 0.12;
         smooth.highs += (rawHighs - smooth.highs) * 0.22;
@@ -349,6 +391,7 @@ export default function SegundoSolVisualizer() {
         smooth.mids += (0.18 - smooth.mids) * 0.02;
         smooth.highs += (0.14 - smooth.highs) * 0.02;
         smooth.energy += (0.14 - smooth.energy) * 0.02;
+        smooth.beat *= 0.92;
       }
 
       uniforms.uTime.value = clock.getElapsedTime() * (0.82 + smooth.energy * 1.15);
@@ -356,6 +399,7 @@ export default function SegundoSolVisualizer() {
       uniforms.uMids.value = smooth.mids;
       uniforms.uHighs.value = smooth.highs;
       uniforms.uEnergy.value = smooth.energy;
+      uniforms.uBeat.value = smooth.beat;
       uniforms.uLiquid.value = liquid;
       uniforms.uBloom.value = bloom;
       uniforms.uGravity.value = gravity;
