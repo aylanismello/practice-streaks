@@ -190,7 +190,7 @@ void main() {
   p.x *= uResolution.x / uResolution.y;
 
   float breath = sin(uTime * (0.18 + uEnergy * 0.42)) * 0.5 + 0.5;
-  float beat = pow(clamp(uBass * 1.55 + uBeat * 1.35, 0.0, 2.4), 1.25);
+  float beat = pow(clamp(uBass * 1.05 + uBeat * 0.95, 0.0, 1.45), 1.28);
   vec2 journey = vec2(
     sin(uTime * 0.105) * 0.34 + sin(uTime * 0.037) * 0.2,
     uTime * (0.11 + uEnergy * 0.32)
@@ -202,7 +202,7 @@ void main() {
     fbm(travelP * 1.6 + vec2(-uTime * 0.035, uTime * 0.042))
   ) - 0.5;
   vec2 warped = p + flow * (0.13 + uMids * 0.42 + beat * 0.18) * uLiquid;
-  warped += vec2(sin(p.y * 3.0 + uTime * 0.7), cos(p.x * 2.5 - uTime * 0.55)) * beat * 0.09;
+  warped += vec2(sin(p.y * 3.0 + uTime * 0.7), cos(p.x * 2.5 - uTime * 0.55)) * beat * 0.045;
 
   float dist = length(warped);
   vec3 cream = vec3(0.965, 0.93, 0.855);
@@ -218,12 +218,12 @@ void main() {
   color += vec3(0.95, 0.28, 0.08) * nebulaB * (0.035 + beat * 0.09);
   color += vec3(1.0, 0.34, 0.08) * shockwave(p, vec2(0.0), uTime * (0.22 + uEnergy * 0.38), beat + uBeat) * 0.7;
 
-  float stackBreath = 1.0 + beat * 0.23 + breath * 0.055;
-  vec2 orbit = vec2(sin(uTime * 0.23), cos(uTime * 0.19)) * (0.08 + beat * 0.18 + uEnergy * 0.08);
+  float stackBreath = 1.0 + beat * 0.075 + breath * 0.03;
+  vec2 orbit = vec2(sin(uTime * 0.23), cos(uTime * 0.19)) * (0.055 + beat * 0.085 + uEnergy * 0.045);
   vec2 topCenter = vec2(0.0, 0.205) + orbit + flow * (0.09 + beat * 0.13);
   vec2 bottomCenter = vec2(0.0, -0.24) - orbit * 0.7 + flow.yx * (0.07 + beat * 0.1);
-  float topRadius = (0.39 + beat * 0.16) * stackBreath;
-  float bottomRadius = (0.355 + beat * 0.14) * stackBreath;
+  float topRadius = (0.34 + beat * 0.065) * stackBreath;
+  float bottomRadius = (0.31 + beat * 0.055) * stackBreath;
   float liquidEdge = (fbm(warped * (7.2 + uLiquid * 2.4) + uTime * 0.06) - 0.5) * 0.055 * uLiquid;
 
   float bottomDisc = circleMask(warped, bottomCenter, bottomRadius + liquidEdge, 0.015 + uMids * 0.018);
@@ -296,6 +296,11 @@ function averageRange(data: Uint8Array<ArrayBuffer>, from: number, to: number) {
   return sum / Math.max(1, end - from) / 255;
 }
 
+function compressAudioLevel(value: number, floor: number, ceiling: number, curve = 0.72) {
+  const normalized = Math.max(0, Math.min(1, (value - floor) / Math.max(0.001, ceiling - floor)));
+  return Math.pow(normalized, curve);
+}
+
 export default function SegundoSolVisualizer() {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -308,6 +313,7 @@ export default function SegundoSolVisualizer() {
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const audioStatsRef = useRef({ bassPeak: 0.24, midsPeak: 0.24, highsPeak: 0.2, energyPeak: 0.24 });
   const [fileName, setFileName] = useState("drop a mix or audio file");
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -318,6 +324,13 @@ export default function SegundoSolVisualizer() {
   const [bloom, setBloom] = useState(DEFAULT_REACTIVITY.bloom);
   const [gravity, setGravity] = useState(DEFAULT_REACTIVITY.gravity);
   const [levels, setLevels] = useState({ bass: 0.12, mids: 0.12, highs: 0.12, energy: 0.12 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -356,17 +369,26 @@ export default function SegundoSolVisualizer() {
       const data = dataRef.current;
       if (analyserRef.current && data) {
         analyserRef.current.getByteFrequencyData(data);
-        const rawBass = averageRange(data, 1, 14) * bass;
-        const rawMids = averageRange(data, 14, 104) * liquid;
-        const rawHighs = averageRange(data, 104, 255) * shimmer;
-        const rawEnergy = averageRange(data, 1, 220) * ((bass + liquid + shimmer) / 3);
-        const transient = Math.max(0, rawBass - smooth.lastBass - 0.035);
-        smooth.lastBass += (rawBass - smooth.lastBass) * 0.08;
-        smooth.beat = Math.max(transient * 5.5, smooth.beat * 0.86);
-        smooth.bass += (rawBass - smooth.bass) * 0.16;
-        smooth.mids += (rawMids - smooth.mids) * 0.12;
-        smooth.highs += (rawHighs - smooth.highs) * 0.22;
-        smooth.energy += (rawEnergy - smooth.energy) * 0.1;
+        const bassAvg = averageRange(data, 1, 14);
+        const midsAvg = averageRange(data, 14, 104);
+        const highsAvg = averageRange(data, 104, 255);
+        const energyAvg = averageRange(data, 1, 220);
+        const stats = audioStatsRef.current;
+        stats.bassPeak = Math.max(bassAvg, stats.bassPeak * 0.994);
+        stats.midsPeak = Math.max(midsAvg, stats.midsPeak * 0.995);
+        stats.highsPeak = Math.max(highsAvg, stats.highsPeak * 0.996);
+        stats.energyPeak = Math.max(energyAvg, stats.energyPeak * 0.995);
+        const rawBass = compressAudioLevel(bassAvg, 0.025, stats.bassPeak * 0.9, 0.62) * bass * 0.72;
+        const rawMids = compressAudioLevel(midsAvg, 0.02, stats.midsPeak * 0.92, 0.78) * liquid * 0.62;
+        const rawHighs = compressAudioLevel(highsAvg, 0.015, stats.highsPeak * 0.9, 0.7) * shimmer * 0.58;
+        const rawEnergy = compressAudioLevel(energyAvg, 0.025, stats.energyPeak * 0.94, 0.82) * ((bass + liquid + shimmer) / 3) * 0.58;
+        const transient = Math.max(0, rawBass - smooth.lastBass - 0.08);
+        smooth.lastBass += (rawBass - smooth.lastBass) * 0.06;
+        smooth.beat = Math.max(Math.min(0.65, transient * 2.9), smooth.beat * 0.82);
+        smooth.bass += (rawBass - smooth.bass) * 0.12;
+        smooth.mids += (rawMids - smooth.mids) * 0.1;
+        smooth.highs += (rawHighs - smooth.highs) * 0.17;
+        smooth.energy += (rawEnergy - smooth.energy) * 0.08;
       } else {
         smooth.bass += (0.16 - smooth.bass) * 0.02;
         smooth.mids += (0.18 - smooth.mids) * 0.02;
@@ -376,11 +398,11 @@ export default function SegundoSolVisualizer() {
       }
 
       uniforms.uTime.value = clock.getElapsedTime() * (0.82 + smooth.energy * 1.15);
-      uniforms.uBass.value = smooth.bass;
-      uniforms.uMids.value = smooth.mids;
-      uniforms.uHighs.value = smooth.highs;
-      uniforms.uEnergy.value = smooth.energy;
-      uniforms.uBeat.value = smooth.beat;
+      uniforms.uBass.value = Math.min(1.05, smooth.bass);
+      uniforms.uMids.value = Math.min(0.95, smooth.mids);
+      uniforms.uHighs.value = Math.min(1.05, smooth.highs);
+      uniforms.uEnergy.value = Math.min(0.9, smooth.energy);
+      uniforms.uBeat.value = Math.min(0.65, smooth.beat);
       uniforms.uLiquid.value = liquid;
       uniforms.uBloom.value = bloom;
       uniforms.uGravity.value = gravity;
@@ -452,6 +474,7 @@ export default function SegundoSolVisualizer() {
     audioRef.current.src = url;
     audioRef.current.load();
     setFileName(file.name);
+    audioStatsRef.current = { bassPeak: 0.24, midsPeak: 0.24, highsPeak: 0.2, energyPeak: 0.24 };
     setIsPlaying(false);
     setExportMode("idle");
   };
@@ -465,6 +488,16 @@ export default function SegundoSolVisualizer() {
     loadFile(event.target.files?.[0]);
   };
 
+
+  const toggleFullscreen = async () => {
+    const target = mountRef.current;
+    if (!target) return;
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await target.requestFullscreen();
+    }
+  };
 
   const downloadStill = () => {
     const canvas = rendererRef.current?.domElement;
@@ -550,9 +583,15 @@ export default function SegundoSolVisualizer() {
       <section className="relative min-h-screen p-4 sm:p-6 lg:p-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_10%,rgba(255,135,31,0.18),transparent_28%),radial-gradient(circle_at_78%_18%,rgba(250,190,70,0.14),transparent_26%),linear-gradient(135deg,#040617,#080522_48%,#120719)]" />
         <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl flex-col gap-5 lg:flex-row">
-          <div className="relative min-h-[62vh] flex-1 overflow-hidden rounded-[2rem] border border-orange-200/15 bg-black shadow-2xl shadow-orange-950/40">
-            <div ref={mountRef} className="absolute inset-0" />
+          <div className="relative flex min-h-[62vh] flex-1 items-center justify-center overflow-hidden rounded-[2rem] border border-orange-200/15 bg-black shadow-2xl shadow-orange-950/40">
+            <div ref={mountRef} className="relative aspect-video w-full max-w-[1600px] overflow-hidden bg-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-50 fullscreen:max-w-none fullscreen:rounded-none" />
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_40%,rgba(0,0,0,0.38)_100%)]" />
+            <button
+              onClick={toggleFullscreen}
+              className="absolute right-5 top-5 rounded-full border border-orange-100/20 bg-black/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-orange-50/80 backdrop-blur-md transition hover:bg-orange-100/10"
+            >
+              {isFullscreen ? "exit full" : "full screen"}
+            </button>
             <div className="pointer-events-none absolute left-5 top-5 rounded-full border border-orange-100/15 bg-black/25 px-4 py-2 text-xs uppercase tracking-[0.3em] text-orange-100/75 backdrop-blur-md">
               segundo sol / hidden lab
             </div>
@@ -620,7 +659,7 @@ export default function SegundoSolVisualizer() {
                 download PNG still
               </button>
             </div>
-            <p className="mb-5 text-xs leading-5 text-orange-100/45">full export renders the whole track from start to finish and downloads automatically at the end. faster-than-realtime export needs the next render pipeline.</p>
+            <p className="mb-5 text-xs leading-5 text-orange-100/45">preview/export frame is locked to 16:9 for DaVinci/Magic Mask use. audio is adaptively normalized for loud mastered tracks, so it should react without blowing out.</p>
 
             <div className="mb-5 space-y-3 rounded-3xl border border-orange-100/15 bg-black/20 p-4">
               <AudioMeter label="bass → sun pulse" value={levels.bass} color="from-orange-300 to-rose-500" />
