@@ -107,17 +107,43 @@ vec3 watercolor(vec2 p, vec2 center, vec3 hot, vec3 cool, float seed, float audi
   return col;
 }
 
+float particleRiver(vec2 p, float layer, float speed, float density) {
+  vec2 q = p;
+  q.x += sin(q.y * (2.2 + layer) + uTime * 0.22) * 0.18;
+  q.y += uTime * speed + fbm(q * 1.8 + layer) * 0.38;
+  vec2 grid = fract(q * density) - 0.5;
+  vec2 id = floor(q * density);
+  float n = hash(id + layer * 11.7);
+  float d = length(grid + vec2(sin(n * 6.28 + uTime * speed), cos(n * 6.28)) * 0.18);
+  float spark = smoothstep(0.09, 0.0, d) * step(0.62, n);
+  return spark * (0.45 + pow(n, 3.0));
+}
+
+float shockwave(vec2 p, vec2 center, float phase, float amp) {
+  float d = length(p - center);
+  float ring = abs(fract(d * 2.8 - phase) - 0.5);
+  return smoothstep(0.045 + amp * 0.02, 0.0, ring) * exp(-d * 0.9) * amp;
+}
+
 void main() {
   vec2 uv = vUv;
   vec2 p = (uv * 2.0 - 1.0);
   p.x *= uResolution.x / uResolution.y;
 
   float breath = sin(uTime * (0.18 + uEnergy * 0.42)) * 0.5 + 0.5;
+  float beat = pow(clamp(uBass * 1.25, 0.0, 1.8), 1.55);
+  vec2 journey = vec2(
+    sin(uTime * 0.105) * 0.34 + sin(uTime * 0.037) * 0.2,
+    uTime * (0.11 + uEnergy * 0.32)
+  );
+  vec2 cameraDrift = vec2(sin(uTime * 0.071), cos(uTime * 0.053)) * (0.1 + uEnergy * 0.24);
+  vec2 travelP = p + journey + cameraDrift;
   vec2 flow = vec2(
-    fbm(p * 1.25 + vec2(uTime * 0.03, uTime * 0.016)),
-    fbm(p * 1.6 + vec2(-uTime * 0.02, uTime * 0.027))
+    fbm(travelP * 1.25 + vec2(uTime * 0.05, uTime * 0.02)),
+    fbm(travelP * 1.6 + vec2(-uTime * 0.035, uTime * 0.042))
   ) - 0.5;
-  vec2 warped = p + flow * (0.08 + uMids * 0.27) * uLiquid;
+  vec2 warped = p + flow * (0.13 + uMids * 0.42 + beat * 0.18) * uLiquid;
+  warped += vec2(sin(p.y * 3.0 + uTime * 0.7), cos(p.x * 2.5 - uTime * 0.55)) * beat * 0.055;
 
   float dist = length(warped);
   vec3 cream = vec3(0.965, 0.93, 0.855);
@@ -125,15 +151,20 @@ void main() {
   vec3 deep = vec3(0.002, 0.004, 0.02);
   vec3 color = mix(indigo, deep, smoothstep(0.0, 1.45, dist));
 
-  float paperField = fbm(warped * 3.0 + uTime * 0.018);
-  color = mix(color, cream * (0.82 + paperField * 0.13), 0.07 + uBloom * 0.025);
-  color += vec3(0.1, 0.035, 0.2) * smoothstep(0.35, 0.86, fbm(warped * 2.1 - uTime * 0.02)) * (0.08 + uMids * 0.18);
+  float paperField = fbm((warped + journey * 0.32) * 3.0 + uTime * 0.018);
+  color = mix(color, cream * (0.82 + paperField * 0.13), 0.055 + uBloom * 0.018);
+  float nebulaA = smoothstep(0.28, 0.86, fbm(travelP * 1.15 + flow * 1.8));
+  float nebulaB = smoothstep(0.45, 0.9, fbm(travelP * 2.8 - uTime * 0.045));
+  color += vec3(0.08, 0.03, 0.22) * nebulaA * (0.1 + uMids * 0.34);
+  color += vec3(0.95, 0.28, 0.08) * nebulaB * (0.035 + beat * 0.09);
+  color += vec3(0.18, 0.08, 0.36) * shockwave(p, vec2(0.0), uTime * (0.22 + uEnergy * 0.38), beat);
 
-  float stackBreath = 1.0 + uBass * 0.12 + breath * 0.035;
-  vec2 topCenter = vec2(0.0 + flow.x * 0.035, 0.205 + flow.y * 0.025);
-  vec2 bottomCenter = vec2(0.0 - flow.y * 0.025, -0.24 + flow.x * 0.025);
-  float topRadius = (0.39 + uBass * 0.055) * stackBreath;
-  float bottomRadius = (0.355 + uBass * 0.045) * stackBreath;
+  float stackBreath = 1.0 + beat * 0.23 + breath * 0.055;
+  vec2 orbit = vec2(sin(uTime * 0.23), cos(uTime * 0.19)) * (0.06 + beat * 0.11 + uEnergy * 0.06);
+  vec2 topCenter = vec2(0.0, 0.205) + orbit + flow * (0.09 + beat * 0.13);
+  vec2 bottomCenter = vec2(0.0, -0.24) - orbit * 0.7 + flow.yx * (0.07 + beat * 0.1);
+  float topRadius = (0.39 + beat * 0.105) * stackBreath;
+  float bottomRadius = (0.355 + beat * 0.095) * stackBreath;
   float liquidEdge = (fbm(warped * (7.2 + uLiquid * 2.4) + uTime * 0.06) - 0.5) * 0.055 * uLiquid;
 
   float bottomDisc = circleMask(warped, bottomCenter, bottomRadius + liquidEdge, 0.015 + uMids * 0.018);
@@ -170,10 +201,16 @@ void main() {
   float filament = smoothstep(0.64, 1.0, fbm(warped * 12.0 + flow * 5.0 + uTime * (0.12 + uEnergy * 0.22)));
   color += vec3(1.0, 0.45, 0.12) * filament * (topDisc + bottomDisc) * 0.08 * (0.4 + uMids);
 
-  vec2 starGrid = floor((uv + flow * 0.035) * vec2(155.0, 95.0));
-  float star = step(0.988 - uHighs * 0.012, hash(starGrid));
-  float twinkle = pow(hash(starGrid + floor(uTime * (1.4 + uEnergy * 5.0))), 9.0);
-  color += vec3(0.98, 0.82, 0.52) * star * (0.12 + twinkle * (0.75 + uHighs * 2.2)) * (0.52 + uHighs * uBloom);
+  float riverA = particleRiver(travelP + flow * 0.5, 1.0, 0.16 + uEnergy * 0.45, 16.0 + uHighs * 12.0);
+  float riverB = particleRiver(travelP * 1.35 - flow * 0.8, 4.0, -0.11 - beat * 0.28, 24.0 + uHighs * 16.0);
+  float dust = particleRiver(travelP * 0.72 + vec2(0.0, uTime * 0.18), 8.0, 0.08 + uEnergy * 0.24, 9.0);
+  vec2 starGrid = floor((uv + journey * 0.05 + flow * (0.05 + uHighs * 0.04)) * vec2(170.0 + uHighs * 90.0, 105.0 + uHighs * 55.0));
+  float star = step(0.986 - uHighs * 0.018 - beat * 0.006, hash(starGrid));
+  float twinkle = pow(hash(starGrid + floor(uTime * (1.4 + uEnergy * 8.0 + uHighs * 9.0))), 7.0);
+  color += vec3(0.98, 0.82, 0.52) * star * (0.1 + twinkle * (0.8 + uHighs * 3.0)) * (0.52 + uHighs * uBloom);
+  color += vec3(1.0, 0.58, 0.2) * riverA * (0.16 + uHighs * 0.75 + beat * 0.25);
+  color += vec3(0.86, 0.22, 1.0) * riverB * (0.12 + uHighs * 0.62 + uMids * 0.18);
+  color += vec3(0.45, 0.7, 1.0) * dust * (0.05 + uEnergy * 0.18);
 
   float vignette = smoothstep(1.58, 0.18, length(p));
   color *= 0.58 + vignette * (0.65 + uEnergy * 0.22);
@@ -444,7 +481,7 @@ export default function SegundoSolVisualizer() {
             </div>
             <div className="pointer-events-none absolute bottom-5 left-5 right-5 rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
               <p className="max-w-3xl text-sm text-orange-50/80">
-                twin suns in deep indigo space. bass breathes the suns, mids pull the liquid wall, highs wake the stars.
+                twin suns moving through deep indigo space. bass drives the bodies and shockwaves, mids bend the field, highs scatter particle rivers.
               </p>
             </div>
           </div>
