@@ -18,7 +18,7 @@ type VisualPreset = {
 const PRESETS: VisualPreset[] = [
   { name: "ritual", label: "ritual glow", bass: 1.15, liquid: 0.9, shimmer: 0.8, bloom: 1.05, gravity: 0.62 },
   { name: "oceanic", label: "liquid altar", bass: 0.85, liquid: 1.45, shimmer: 0.7, bloom: 0.95, gravity: 0.45 },
-  { name: "solar storm", label: "solar storm", bass: 1.35, liquid: 1.1, shimmer: 1.55, bloom: 1.3, gravity: 0.8 },
+  { name: "solar storm", label: "solar storm", bass: 1.45, liquid: 1.25, shimmer: 1.8, bloom: 1.45, gravity: 0.8 },
 ];
 
 const vertexShader = `
@@ -72,6 +72,17 @@ float fbm(vec2 p) {
 
 float circleMask(vec2 p, vec2 center, float radius, float softness) {
   return smoothstep(radius + softness, radius - softness, length(p - center));
+}
+
+float sphereLight(vec2 p, vec2 center, float radius, vec3 lightDir) {
+  vec2 q = (p - center) / radius;
+  float rr = dot(q, q);
+  if (rr > 1.0) return 0.0;
+  vec3 n = normalize(vec3(q, sqrt(max(0.0, 1.0 - rr))));
+  float diffuse = max(dot(n, normalize(lightDir)), 0.0);
+  float rim = pow(1.0 - max(n.z, 0.0), 2.4);
+  float spec = pow(max(dot(reflect(-normalize(lightDir), n), vec3(0.0, 0.0, 1.0)), 0.0), 28.0);
+  return diffuse * 0.72 + rim * 0.34 + spec * (0.18 + uHighs * 0.38);
 }
 
 float crescentCut(vec2 p, vec2 center, float radius) {
@@ -129,6 +140,12 @@ void main() {
   float topDisc = circleMask(warped, topCenter, topRadius + liquidEdge * 0.9, 0.015 + uMids * 0.018);
   vec3 bottomColor = watercolor(warped, bottomCenter, vec3(1.0, 0.27, 0.20), vec3(0.84, 0.14, 0.92), 4.2, uMids);
   vec3 topColor = watercolor(warped, topCenter, vec3(1.0, 0.70, 0.08), vec3(1.0, 0.22, 0.08), 1.7, uBass);
+  float topLight = sphereLight(warped, topCenter, topRadius, vec3(-0.35, 0.42, 0.88));
+  float bottomLight = sphereLight(warped, bottomCenter, bottomRadius, vec3(0.32, 0.5, 0.82));
+  topColor *= 0.68 + topLight * (0.88 + uBloom * 0.28);
+  bottomColor *= 0.62 + bottomLight * (0.9 + uBloom * 0.24);
+  topColor += vec3(1.0, 0.86, 0.42) * pow(topLight, 3.2) * (0.18 + uHighs * 0.22);
+  bottomColor += vec3(1.0, 0.36, 0.86) * pow(bottomLight, 3.0) * (0.16 + uHighs * 0.2);
 
   float lowerAura = exp(-max(length(warped - bottomCenter) - bottomRadius, 0.0) * 7.5) * 0.32;
   float upperAura = exp(-max(length(warped - topCenter) - topRadius, 0.0) * 7.2) * 0.38;
@@ -147,6 +164,11 @@ void main() {
 
   float rings = sin((length(warped - vec2(0.0, -0.02)) - uTime * (0.035 + uEnergy * 0.09)) * 34.0 + fbm(warped * 5.2) * 6.0);
   color += vec3(1.0, 0.32, 0.08) * smoothstep(0.79, 1.0, rings) * 0.045 * uLiquid * (0.35 + uMids) * (topDisc + bottomDisc + 0.22);
+
+  float contour = abs(length(warped - topCenter) - topRadius) + abs(length(warped - bottomCenter) - bottomRadius);
+  color += vec3(1.0, 0.66, 0.22) * smoothstep(0.08, 0.0, contour) * 0.05 * (0.5 + uBass);
+  float filament = smoothstep(0.64, 1.0, fbm(warped * 12.0 + flow * 5.0 + uTime * (0.12 + uEnergy * 0.22)));
+  color += vec3(1.0, 0.45, 0.12) * filament * (topDisc + bottomDisc) * 0.08 * (0.4 + uMids);
 
   vec2 starGrid = floor((uv + flow * 0.035) * vec2(155.0, 95.0));
   float star = step(0.988 - uHighs * 0.012, hash(starGrid));
@@ -182,6 +204,7 @@ export default function SegundoSolVisualizer() {
   const [fileName, setFileName] = useState("drop a mix or audio file");
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [exportMode, setExportMode] = useState<"idle" | "clip" | "full">("idle");
   const [presetName, setPresetName] = useState<PresetName>("ritual");
   const [bass, setBass] = useState(1.15);
   const [liquid, setLiquid] = useState(0.9);
@@ -234,9 +257,9 @@ export default function SegundoSolVisualizer() {
       const data = dataRef.current;
       if (analyserRef.current && data) {
         analyserRef.current.getByteFrequencyData(data);
-        const rawBass = averageRange(data, 1, 12) * bass;
-        const rawMids = averageRange(data, 12, 86) * liquid;
-        const rawHighs = averageRange(data, 86, 220) * shimmer;
+        const rawBass = averageRange(data, 1, 14) * bass;
+        const rawMids = averageRange(data, 14, 104) * liquid;
+        const rawHighs = averageRange(data, 104, 255) * shimmer;
         const rawEnergy = averageRange(data, 1, 220) * ((bass + liquid + shimmer) / 3);
         smooth.bass += (rawBass - smooth.bass) * 0.16;
         smooth.mids += (rawMids - smooth.mids) * 0.12;
@@ -316,6 +339,7 @@ export default function SegundoSolVisualizer() {
     audioRef.current.load();
     setFileName(file.name);
     setIsPlaying(false);
+    setExportMode("idle");
   };
 
   const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
@@ -337,16 +361,18 @@ export default function SegundoSolVisualizer() {
     link.click();
   };
 
-  const toggleRecording = async () => {
+  const toggleRecording = async (mode: "clip" | "full" = "clip") => {
     const canvas = rendererRef.current?.domElement;
     if (!canvas) return;
 
     if (recorderRef.current && recorderRef.current.state === "recording") {
       recorderRef.current.stop();
       setIsRecording(false);
+      setExportMode("idle");
       return;
     }
 
+    setExportMode(mode);
     await ensureAudioGraph();
     const canvasStream = canvas.captureStream(30);
     const audioTracks = recordingDestinationRef.current?.stream.getAudioTracks() ?? [];
@@ -365,13 +391,31 @@ export default function SegundoSolVisualizer() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `segundo-sol-render-${Date.now()}.webm`;
+      link.download = `segundo-sol-${mode === "full" ? "full-mix" : "clip"}-${Date.now()}.webm`;
       link.click();
       URL.revokeObjectURL(url);
       setIsRecording(false);
+      setExportMode("idle");
     };
     recorder.start(1000);
     setIsRecording(true);
+  };
+
+  const exportFullMix = async () => {
+    const audio = audioRef.current;
+    if (!audio || !audio.src) return;
+    if (recorderRef.current && recorderRef.current.state === "recording") {
+      recorderRef.current.stop();
+      setIsRecording(false);
+      setExportMode("idle");
+      return;
+    }
+
+    audio.pause();
+    audio.currentTime = 0;
+    await toggleRecording("full");
+    await audio.play();
+    setIsPlaying(true);
   };
 
   const togglePlay = async () => {
@@ -410,7 +454,7 @@ export default function SegundoSolVisualizer() {
               <p className="text-xs uppercase tracking-[0.35em] text-orange-200/55">v1 visualizer</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-orange-50">two suns, breathing</h1>
               <p className="mt-3 text-sm leading-6 text-orange-100/62">
-                upload a DJ mix or track and tune the proof of concept live. record a WebM preview or grab a still when the look hits.
+                upload a DJ mix or track and tune the proof of concept live. export a full real-time WebM, capture a shorter clip, or grab a still when the look hits.
               </p>
             </div>
 
@@ -424,7 +468,17 @@ export default function SegundoSolVisualizer() {
               <input className="hidden" type="file" accept="audio/*" onChange={handleFile} />
             </label>
 
-            <audio ref={audioRef} onEnded={() => setIsPlaying(false)} className="mb-4 w-full" controls />
+            <audio
+              ref={audioRef}
+              onEnded={() => {
+                setIsPlaying(false);
+                if (exportMode === "full" && recorderRef.current?.state === "recording") {
+                  recorderRef.current.stop();
+                }
+              }}
+              className="mb-4 w-full"
+              controls
+            />
             <button
               onClick={togglePlay}
               className="mb-5 w-full rounded-full bg-gradient-to-r from-amber-300 via-orange-400 to-rose-500 px-5 py-3 text-sm font-semibold text-[#160905] shadow-lg shadow-orange-900/35 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
@@ -432,20 +486,27 @@ export default function SegundoSolVisualizer() {
               {isPlaying ? "pause visualizer" : "play / connect audio"}
             </button>
 
-            <div className="mb-5 grid grid-cols-2 gap-2">
+            <div className="mb-3 grid grid-cols-2 gap-2">
               <button
-                onClick={toggleRecording}
+                onClick={exportFullMix}
+                className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${isRecording && exportMode === "full" ? "border-rose-200/80 bg-rose-400/25 text-rose-50" : "border-orange-200/50 bg-orange-300/15 text-orange-50 hover:bg-orange-300/25"}`}
+              >
+                {isRecording && exportMode === "full" ? "exporting full mix…" : "export full mix"}
+              </button>
+              <button
+                onClick={() => toggleRecording("clip")}
                 className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${isRecording ? "border-rose-200/80 bg-rose-400/25 text-rose-50" : "border-orange-200/30 bg-white/[0.04] text-orange-50 hover:bg-white/[0.08]"}`}
               >
-                {isRecording ? "stop + download WebM" : "record WebM"}
+                {isRecording ? "stop + download" : "export clip"}
               </button>
               <button
                 onClick={downloadStill}
-                className="rounded-2xl border border-orange-200/30 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-orange-50 transition hover:bg-white/[0.08]"
+                className="col-span-2 rounded-2xl border border-orange-200/30 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-orange-50 transition hover:bg-white/[0.08]"
               >
-                download PNG
+                download PNG still
               </button>
             </div>
+            <p className="mb-5 text-xs leading-5 text-orange-100/45">full export renders the whole track from start to finish and downloads automatically at the end. faster-than-realtime export needs the next render pipeline.</p>
 
             <div className="mb-5 grid grid-cols-3 gap-2">
               {PRESETS.map((item) => (
@@ -471,6 +532,13 @@ export default function SegundoSolVisualizer() {
       </section>
     </main>
   );
+}
+
+function FormatTime({ seconds }: { seconds: number }) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  const minutes = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60).toString().padStart(2, "0");
+  return <span>{minutes}:{secs}</span>;
 }
 
 function Slider({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
