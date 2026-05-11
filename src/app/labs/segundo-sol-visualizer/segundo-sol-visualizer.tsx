@@ -125,6 +125,44 @@ float shockwave(vec2 p, vec2 center, float phase, float amp) {
   return smoothstep(0.045 + amp * 0.02, 0.0, ring) * exp(-d * 0.9) * amp;
 }
 
+vec3 cinematicStars(vec2 p, float layer, float scale, float threshold, float speed, float audio) {
+  vec2 q = p;
+  q.y += uTime * speed;
+  q.x += sin(q.y * 0.8 + uTime * 0.16 + layer) * 0.18;
+  vec2 cell = floor(q * scale);
+  vec2 local = fract(q * scale) - 0.5;
+  float seed = hash(cell + layer * 37.1);
+  vec2 offset = vec2(hash(cell + layer + 2.4), hash(cell - layer + 7.8)) - 0.5;
+  local -= offset * 0.54;
+  float present = step(threshold - audio * 0.045, seed);
+  float size = mix(0.022, 0.075, pow(seed, 8.0)) * (1.0 + audio * 1.8);
+  float d = length(local);
+  float core = exp(-d * d / (size * size));
+  float halo = exp(-d * 13.0) * (0.16 + audio * 0.36);
+  float rays = (exp(-abs(local.x) * 32.0) + exp(-abs(local.y) * 32.0)) * exp(-d * 7.5);
+  float diagonal = (exp(-abs(local.x + local.y) * 28.0) + exp(-abs(local.x - local.y) * 28.0)) * exp(-d * 8.0);
+  float twinkle = 0.42 + 0.58 * sin(uTime * (1.4 + seed * 5.8 + audio * 7.0) + seed * 38.0);
+  vec3 warm = vec3(1.0, 0.76, 0.42);
+  vec3 cool = vec3(0.55, 0.72, 1.0);
+  vec3 white = vec3(1.0, 0.94, 0.82);
+  vec3 tint = mix(cool, warm, hash(cell + 19.0));
+  tint = mix(tint, white, pow(seed, 10.0));
+  float intensity = present * (core * (0.75 + twinkle * 1.6) + halo + rays * (0.18 + audio * 0.9) + diagonal * audio * 0.45);
+  return tint * intensity;
+}
+
+vec3 starStreaks(vec2 p, float audio, float bass) {
+  vec2 q = p;
+  q.y += uTime * (0.22 + audio * 0.9 + bass * 0.65);
+  q.x += sin(q.y * 2.0 + uTime * 0.5) * 0.12;
+  vec2 cell = floor(q * vec2(42.0, 78.0));
+  vec2 local = fract(q * vec2(42.0, 78.0)) - 0.5;
+  float seed = hash(cell);
+  float active = step(0.92 - audio * 0.08 - bass * 0.035, seed);
+  float tail = exp(-abs(local.x) * 38.0) * smoothstep(0.48, -0.45, local.y) * exp(-max(local.y, 0.0) * 6.0);
+  return vec3(0.95, 0.62, 0.32) * tail * active * (0.15 + audio * 0.85 + bass * 0.5);
+}
+
 void main() {
   vec2 uv = vUv;
   vec2 p = (uv * 2.0 - 1.0);
@@ -204,10 +242,14 @@ void main() {
   float riverA = particleRiver(travelP + flow * 0.5, 1.0, 0.16 + uEnergy * 0.45, 16.0 + uHighs * 12.0);
   float riverB = particleRiver(travelP * 1.35 - flow * 0.8, 4.0, -0.11 - beat * 0.28, 24.0 + uHighs * 16.0);
   float dust = particleRiver(travelP * 0.72 + vec2(0.0, uTime * 0.18), 8.0, 0.08 + uEnergy * 0.24, 9.0);
-  vec2 starGrid = floor((uv + journey * 0.05 + flow * (0.05 + uHighs * 0.04)) * vec2(170.0 + uHighs * 90.0, 105.0 + uHighs * 55.0));
-  float star = step(0.986 - uHighs * 0.018 - beat * 0.006, hash(starGrid));
-  float twinkle = pow(hash(starGrid + floor(uTime * (1.4 + uEnergy * 8.0 + uHighs * 9.0))), 7.0);
-  color += vec3(0.98, 0.82, 0.52) * star * (0.1 + twinkle * (0.8 + uHighs * 3.0)) * (0.52 + uHighs * uBloom);
+  vec2 starSpace = p + journey * 0.18 + flow * (0.08 + uHighs * 0.08);
+  vec3 stars = vec3(0.0);
+  stars += cinematicStars(starSpace * 0.72, 1.0, 28.0, 0.965, 0.035 + uEnergy * 0.08, uHighs + beat * 0.35);
+  stars += cinematicStars(starSpace * 1.15 + vec2(3.1, -1.8), 2.0, 48.0, 0.982, 0.075 + uEnergy * 0.18, uHighs * 1.25 + beat * 0.25);
+  stars += cinematicStars(starSpace * 1.9 - vec2(2.4, 4.2), 3.0, 76.0, 0.991, 0.13 + uEnergy * 0.27, uHighs * 1.65 + beat * 0.18);
+  stars += starStreaks(starSpace + flow * 0.4, uHighs + uEnergy * 0.4, beat);
+  float starOcclusion = 1.0 - clamp((topDisc + bottomDisc) * 0.85, 0.0, 0.85);
+  color += stars * starOcclusion * (0.56 + uBloom * 0.28);
   color += vec3(1.0, 0.58, 0.2) * riverA * (0.16 + uHighs * 0.75 + beat * 0.25);
   color += vec3(0.86, 0.22, 1.0) * riverB * (0.12 + uHighs * 0.62 + uMids * 0.18);
   color += vec3(0.45, 0.7, 1.0) * dust * (0.05 + uEnergy * 0.18);
@@ -481,7 +523,7 @@ export default function SegundoSolVisualizer() {
             </div>
             <div className="pointer-events-none absolute bottom-5 left-5 right-5 rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
               <p className="max-w-3xl text-sm text-orange-50/80">
-                twin suns moving through deep indigo space. bass drives the bodies and shockwaves, mids bend the field, highs scatter particle rivers.
+                twin suns moving through deep indigo space. bass drives the bodies and shockwaves, mids bend the field, highs ignite cinematic stars and particle rivers.
               </p>
             </div>
           </div>
