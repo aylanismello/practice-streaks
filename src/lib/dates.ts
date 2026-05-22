@@ -1,17 +1,21 @@
-// Day boundary is 4am Pacific — a new "day" starts at 4am, not midnight.
-const TIMEZONE = "America/Los_Angeles";
+// Day boundary is 4am in the active practice timezone — a new "day" starts at 4am, not midnight.
+// Default to LA for server/fallback callers, but the client should pass the browser timezone
+// so travel works naturally (ex: China Saturday morning is Saturday, not LA Friday).
+export const DEFAULT_TIMEZONE = "America/Los_Angeles";
 const DAY_START_HOUR = 4;
 
-export function getEffectiveDate(now: Date = new Date()): string {
-  // Convert to Pacific time
-  const pacific = new Date(
-    now.toLocaleString("en-US", { timeZone: TIMEZONE })
+export function getEffectiveDate(
+  now: Date = new Date(),
+  timeZone: string = DEFAULT_TIMEZONE
+): string {
+  const local = new Date(
+    now.toLocaleString("en-US", { timeZone })
   );
-  // If before 4am, it's still "yesterday"
-  if (pacific.getHours() < DAY_START_HOUR) {
-    pacific.setDate(pacific.getDate() - 1);
+  // If before 4am in the active practice timezone, it's still "yesterday"
+  if (local.getHours() < DAY_START_HOUR) {
+    local.setDate(local.getDate() - 1);
   }
-  return formatDate(pacific);
+  return formatDate(local);
 }
 
 export function formatDate(d: Date): string {

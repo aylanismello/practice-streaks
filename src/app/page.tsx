@@ -2295,7 +2295,8 @@ export default function Dashboard() {
   }, [flowDuration]);
 
   const fetchData = useCallback(async () => {
-    const effectiveDate = getEffectiveDate();
+    const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const effectiveDate = getEffectiveDate(new Date(), browserTimeZone);
     setToday(effectiveDate);
 
     const last7 = getLast7Days(effectiveDate);
