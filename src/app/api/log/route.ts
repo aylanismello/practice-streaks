@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { resolvePracticeDate } from "@/lib/dates";
 
 export async function POST(req: NextRequest) {
   try {
-    const { practice_id, date } = await req.json();
+    const body = await req.json();
+    const { practice_id } = body;
+    const date = resolvePracticeDate(body);
 
-    if (!practice_id || !date) {
+    if (!practice_id) {
       return NextResponse.json(
-        { error: "practice_id and date are required" },
+        { error: "practice_id is required" },
         { status: 400 }
       );
     }
@@ -35,11 +38,13 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { practice_id, date } = await req.json();
+    const body = await req.json();
+    const { practice_id } = body;
+    const date = resolvePracticeDate(body);
 
-    if (!practice_id || !date) {
+    if (!practice_id) {
       return NextResponse.json(
-        { error: "practice_id and date are required" },
+        { error: "practice_id is required" },
         { status: 400 }
       );
     }

@@ -18,6 +18,20 @@ export function getEffectiveDate(
   return formatDate(local);
 }
 
+export interface PracticeDateRequest {
+  date?: string;
+  timeZone?: string;
+  browserTimeZone?: string;
+}
+
+export function resolvePracticeDate(
+  body: PracticeDateRequest,
+  now: Date = new Date()
+): string {
+  if (body.date) return body.date;
+  return getEffectiveDate(now, body.timeZone || body.browserTimeZone || DEFAULT_TIMEZONE);
+}
+
 export function formatDate(d: Date): string {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");

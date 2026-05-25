@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { effectiveWotLevel, effectiveWotScore, normalizeWotScore, WOT_SCORE_TO_LEVEL } from "@/lib/wot";
+import { resolvePracticeDate } from "@/lib/dates";
 
 export async function GET() {
   try {
@@ -31,10 +32,12 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { date, score, color } = await req.json();
+    const body = await req.json();
+    const { score, color } = body;
+    const date = resolvePracticeDate(body);
 
-    if (!date || (score == null && color == null)) {
-      return NextResponse.json({ error: "date and score are required" }, { status: 400 });
+    if (score == null && color == null) {
+      return NextResponse.json({ error: "score is required" }, { status: 400 });
     }
 
     const normalized = normalizeWotScore(score ?? color);
