@@ -1475,8 +1475,9 @@ function FlowHistoryView({ flowLogs }: { flowLogs: FlowLog[] }) {
   );
 }
 
-function TripCountdown({ inline, onClick, isActive }: { inline?: boolean; onClick?: () => void; isActive?: boolean }) {
-  const tripDate = new Date("2026-05-21T00:00:00");
+function TripCountdown({ inline }: { inline?: boolean }) {
+  // A.F.M lands in Ponta Delgada early on Aug 14; count down to that Azores-time arrival.
+  const tripDate = new Date("2026-08-14T01:20:00-01:00");
   const now = new Date();
   const diffMs = tripDate.getTime() - now.getTime();
   const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
@@ -1484,40 +1485,45 @@ function TripCountdown({ inline, onClick, isActive }: { inline?: boolean; onClic
   if (daysRemaining < 0) return null;
 
   if (inline) {
-    // Compact version for top-right on desktop
+    // Compact, decorative version for top-right. No click behavior — just a pleasant little horizon.
     return (
-      <button
-        onClick={onClick}
-        className="text-right rounded-xl px-3 py-2 -mr-3 -mt-2 transition-all duration-200"
+      <div
+        className="relative overflow-hidden text-right rounded-2xl px-3.5 py-2.5 -mr-2 -mt-2 transition-all duration-200"
         style={{
-          background: isActive ? "rgba(245, 158, 11, 0.1)" : "transparent",
-          border: isActive ? "1px solid rgba(245, 158, 11, 0.3)" : "1px solid transparent",
-          cursor: "pointer",
+          background: "linear-gradient(135deg, rgba(0, 102, 0, 0.12), rgba(255, 0, 0, 0.08) 48%, rgba(14, 165, 233, 0.12))",
+          border: "1px solid rgba(34, 197, 94, 0.24)",
+          boxShadow: "0 10px 30px rgba(14, 165, 233, 0.06)",
         }}
+        title="azores countdown"
+        aria-label={`${daysRemaining} ${daysRemaining === 1 ? "day" : "days"} until Azores, Aug 14`}
       >
-        <div className="text-[10px] uppercase tracking-[0.15em] mb-1" style={{ color: isActive ? "#f59e0b" : "var(--text-muted)" }}>
-          folie à trois 🇨🇳
+        <div
+          className="absolute -left-3 -bottom-4 h-10 w-16 rounded-[50%] opacity-50"
+          style={{ background: "radial-gradient(circle, rgba(34,197,94,0.32), rgba(34,197,94,0))" }}
+        />
+        <div className="relative text-[10px] uppercase tracking-[0.15em] mb-1 text-[var(--text-muted)]">
+          azores 🇵🇹 🏝️
         </div>
-        <div className="text-3xl font-light tabular-nums tracking-tight" style={{ color: isActive ? "#f59e0b" : "var(--text)" }}>
+        <div className="relative text-3xl font-light tabular-nums tracking-tight text-[var(--text)]">
           {daysRemaining}
         </div>
-        <div className="text-[10px]" style={{ color: isActive ? "rgba(245, 158, 11, 0.7)" : "var(--text-muted)" }}>
-          days · May 21
+        <div className="relative text-[10px] text-[var(--text-muted)]">
+          {daysRemaining === 1 ? "day" : "days"} · Aug 14
         </div>
-      </button>
+      </div>
     );
   }
 
   return (
     <div className="mt-10 text-center">
-      <div className="inline-block">
+      <div className="inline-block rounded-3xl px-8 py-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
         <div className="text-[var(--text-muted)] text-xs uppercase tracking-[0.2em] mb-3">
           Countdown
         </div>
         <div className="text-lg font-medium tracking-wide mb-2">
-          folie à trois{" "}
-          <span className="inline-block" role="img" aria-label="China flag">
-            🇨🇳
+          azores{" "}
+          <span className="inline-block" role="img" aria-label="Portugal flag and island">
+            🇵🇹 🏝️
           </span>
         </div>
         <div className="text-5xl font-light tabular-nums tracking-tight mb-2 text-[var(--text)]">
@@ -1527,7 +1533,7 @@ function TripCountdown({ inline, onClick, isActive }: { inline?: boolean; onClic
           {daysRemaining === 1 ? "day" : "days"}
         </div>
         <div className="text-xs text-[var(--text-muted)] opacity-60 tracking-wide">
-          FangYuan Retreat · May 21
+          Ponta Delgada · Aug 14
         </div>
       </div>
     </div>
@@ -2493,7 +2499,7 @@ export default function Dashboard() {
           >
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
-          <TripCountdown inline onClick={() => { setChinaMode(!chinaMode); }} isActive={chinaMode} />
+          <TripCountdown inline />
         </div>
       </div>
 
