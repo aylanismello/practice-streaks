@@ -13,6 +13,8 @@ import {
   getRangeLabel,
 } from "@/lib/dates";
 import type { ViewMode } from "@/lib/dates";
+import { WEEKLY_PRACTICE_IDS } from "@/lib/weekly-practices";
+import { WeeklyPracticesCard } from "@/components/WeeklyPracticesCard";
 
 const WIND_DOWN = "23:00"; // 11:00 PM — no screens
 const IN_BED = "23:30"; // 11:30 PM — in bed, lights out
@@ -2066,8 +2068,17 @@ export default function Dashboard() {
     if (!today || timeOffset !== 0) return;
     setTogglingId(practiceId);
     try {
-      const todayCountBefore = logs.filter((l) => l.practice_date === today).length;
-      const willCompleteAll = !isDone && practices.length > 0 && todayCountBefore === practices.length - 1;
+      const dailyPractices = practices.filter((practice) => !WEEKLY_PRACTICE_IDS.has(practice.id));
+      const todayCountBefore = new Set(
+        logs
+          .filter((log) => log.practice_date === today && !WEEKLY_PRACTICE_IDS.has(log.practice_id))
+          .map((log) => log.practice_id)
+      ).size;
+      const willCompleteAll =
+        !WEEKLY_PRACTICE_IDS.has(practiceId) &&
+        !isDone &&
+        dailyPractices.length > 0 &&
+        todayCountBefore === dailyPractices.length - 1;
       if (isDone) {
         await fetch("/api/log", {
           method: "DELETE",
@@ -2095,7 +2106,7 @@ export default function Dashboard() {
     } finally {
       setTogglingId(null);
     }
-  }, [today, timeOffset, logs, practices.length]);
+  }, [today, timeOffset, logs, practices]);
 
   const fetchChinaData = useCallback(async () => {
     try {
@@ -2417,13 +2428,16 @@ export default function Dashboard() {
   const todayLogs = new Set(
     logs.filter((l) => l.practice_date === today).map((l) => l.practice_id)
   );
+  const dailyPractices = practices.filter(
+    (practice) => !WEEKLY_PRACTICE_IDS.has(practice.id)
+  );
 
   const todayFlows = flowLogs.filter((p) => p.date === today);
   const todayFlowMinutes = todayFlows.reduce((a, p) => a + p.duration_min, 0);
 
   return (
     <main className="max-w-[960px] mx-auto px-4 md:px-8 py-6 md:py-10 pb-12">
-      <CelebrationOverlay open={celebrationOpen} onDismiss={() => setCelebrationOpen(false)} totalPractices={practices.length} />
+      <CelebrationOverlay open={celebrationOpen} onDismiss={() => setCelebrationOpen(false)} totalPractices={dailyPractices.length} />
       {/* Flow modal */}
       <FlowTimer
         open={flowOpen}
@@ -2512,7 +2526,7 @@ export default function Dashboard() {
 
       {/* Practice cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3 mb-8 md:mb-10">
-        {practices.map((practice, i) => {
+        {dailyPractices.map((practice, i) => {
           const done = todayLogs.has(practice.id);
           const { count: streak, doneToday } = calculateStreak(practice.id, logs, today);
           return (
@@ -2565,6 +2579,13 @@ export default function Dashboard() {
           );
         })}
       </div>
+
+      <WeeklyPracticesCard
+        logs={logs}
+        today={today}
+        togglingId={togglingId}
+        onToggle={togglePractice}
+      />
 
       {/* Last Night card */}
       {(() => {
@@ -2772,7 +2793,7 @@ export default function Dashboard() {
                         <span className="text-[9px] uppercase tracking-widest text-[var(--text-muted)] opacity-60">Practices</span>
                       </td>
                     </tr>
-                    {practices.map((practice) => (
+                    {dailyPractices.map((practice) => (
                       <tr key={practice.id}>
                         <td className="pr-3 py-1.5 whitespace-nowrap">
                           <span className="text-sm md:text-base">{practice.emoji}</span>
@@ -2924,9 +2945,11 @@ export default function Dashboard() {
                     if (!day) {
                       return <div key={`empty-${i}`} />;
                     }
-                    const dayLogs = logs.filter((l) => l.practice_date === day);
+                    const dayLogs = logs.filter(
+                      (log) => log.practice_date === day && !WEEKLY_PRACTICE_IDS.has(log.practice_id)
+                    );
                     const doneCount = new Set(dayLogs.map((l) => l.practice_id)).size;
-                    const total = practices.length;
+                    const total = dailyPractices.length;
                     const ratio = total > 0 ? doneCount / total : 0;
                     const dayNum = parseInt(day.slice(8, 10));
                     const isToday = day === today;
