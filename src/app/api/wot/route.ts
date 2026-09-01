@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
-import { effectiveWotLevel, effectiveWotScore, normalizeWotScore, WOT_SCORE_TO_LEVEL } from "@/lib/wot";
+import { effectiveWotLevel, effectiveWotScore, normalizeWotScore, wotStorageFields } from "@/lib/wot";
 import { resolvePracticeDate } from "@/lib/dates";
 
 export async function GET() {
@@ -46,9 +46,10 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createServiceClient();
+    const storage = wotStorageFields(normalized);
     const { data, error } = await supabase
       .from("wot_log")
-      .upsert({ date, score: normalized, color: WOT_SCORE_TO_LEVEL[normalized] }, { onConflict: "date" })
+      .upsert({ date, ...storage }, { onConflict: "date" })
       .select()
       .single();
 
@@ -56,7 +57,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, data });
+    return NextResponse.json({
+      ok: true,
+      data: {
+        ...data,
+        score: effectiveWotScore(data),
+        display_color: effectiveWotLevel(data),
+      },
+    });
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }

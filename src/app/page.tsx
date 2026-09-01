@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { effectiveWotLevel, formatWotLabel } from "@/lib/wot";
+import { effectiveWotScore, formatWotScoreLabel, wotScoreCssColor } from "@/lib/wot";
 import {
   getEffectiveDate,
   getLast7Days,
@@ -42,7 +42,7 @@ interface PracticeLog {
   practice_id: string;
 }
 
-import { wotCssColor, wotEmoji, type WotLevel, type WotScore } from "@/lib/wot";
+import { type WotLevel, type WotScore } from "@/lib/wot";
 
 interface WotEntry {
   date: string;
@@ -2914,8 +2914,12 @@ export default function Dashboard() {
                           return (
                             <td key={day} className="text-center py-1.5 px-1">
                               {wot ? (
-                                <span className="text-sm" title={`WOT: ${formatWotLabel(effectiveWotLevel(wot))}`}>
-                                  {wotEmoji(effectiveWotLevel(wot))}
+                                <span
+                                  className="text-[10px] md:text-xs font-mono tabular-nums font-semibold"
+                                  style={{ color: wotScoreCssColor(effectiveWotScore(wot)) }}
+                                  title={`WOT: ${formatWotScoreLabel(effectiveWotScore(wot))}`}
+                                >
+                                  {effectiveWotScore(wot)}
                                 </span>
                               ) : null}
                             </td>
@@ -2986,8 +2990,8 @@ export default function Dashboard() {
                           return (
                             <div
                               className="w-[6px] h-[6px] rounded-full mt-0.5"
-                              style={{ backgroundColor: wotCssColor(effectiveWotLevel(wot)) }}
-                              title={`WOT: ${formatWotLabel(effectiveWotLevel(wot))}`}
+                              style={{ backgroundColor: wotScoreCssColor(effectiveWotScore(wot)) }}
+                              title={`WOT: ${formatWotScoreLabel(effectiveWotScore(wot))}`}
                             />
                           );
                         })()}
