@@ -4,8 +4,11 @@ import test from "node:test";
 import {
   buildYang24Lessons,
   CHEN18_LESSONS,
+  EIGHT_BROCADES_LESSONS,
   formatTaiChiTimestamp,
   getYouTubeVideoId,
+  SIX_HEALING_SOUNDS_LESSONS,
+  TAI_CHI_10_LESSONS,
 } from "../src/lib/tai-chi-forms.ts";
 
 test("maps the final 18 playlist videos to Chen movements 1 through 18", () => {
@@ -18,6 +21,18 @@ test("matches the numbered titles that confirm the playlist offset", () => {
   assert.equal(CHEN18_LESSONS[8].youtubeUrl, "https://youtu.be/bP--0jW4FCk");
   assert.equal(CHEN18_LESSONS[11].youtubeUrl, "https://youtu.be/7FIVkbZKDvQ");
   assert.equal(CHEN18_LESSONS[12].youtubeUrl, "https://youtu.be/wia28Uscw5Q");
+});
+
+test("maps each single-video practice to its FangYuan playlist video", () => {
+  assert.deepEqual(
+    [TAI_CHI_10_LESSONS, SIX_HEALING_SOUNDS_LESSONS, EIGHT_BROCADES_LESSONS]
+      .map((lessons) => lessons.map((lesson) => lesson.youtubeUrl)),
+    [
+      ["https://youtu.be/f3m-ZImsr_M"],
+      ["https://youtu.be/XDI6PMD7Blg"],
+      ["https://youtu.be/8-bZxZZuZwY"],
+    ]
+  );
 });
 
 test("combines Yang movements 7 and 8 into one linked lesson", () => {

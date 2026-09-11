@@ -1,4 +1,9 @@
-export type TaiChiFormId = "yang24" | "chen18";
+export type TaiChiFormId =
+  | "yang24"
+  | "chen18"
+  | "taichi10"
+  | "six_healing_sounds"
+  | "eight_brocades";
 
 export interface TaiChiLesson {
   number: number;
@@ -27,6 +32,18 @@ export const YANG24_PLAYLIST_URL =
 
 export const CHEN18_PLAYLIST_URL =
   "https://www.youtube.com/playlist?list=PL7dztrxiJ7iyYbAlcEBxhRXq_DpMvMW5n";
+
+export const TAI_CHI_10_LESSONS: readonly TaiChiLesson[] = [
+  { number: 1, label: "1", name: "Tai Chi 10 Form", youtubeUrl: "https://youtu.be/f3m-ZImsr_M" },
+];
+
+export const SIX_HEALING_SOUNDS_LESSONS: readonly TaiChiLesson[] = [
+  { number: 1, label: "1", name: "Six Healing Sounds Qigong", youtubeUrl: "https://youtu.be/XDI6PMD7Blg" },
+];
+
+export const EIGHT_BROCADES_LESSONS: readonly TaiChiLesson[] = [
+  { number: 1, label: "1", name: "Eight Brocades Qigong", youtubeUrl: "https://youtu.be/8-bZxZZuZwY" },
+];
 
 const YANG24_MOVES = [
   { number: 1, name: "Commencement" },

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 
-const VALID_FORMS = new Set(["yang24", "chen18"]);
+const VALID_FORMS = new Set([
+  "yang24",
+  "chen18",
+  "taichi10",
+  "six_healing_sounds",
+  "eight_brocades",
+]);
 const MAX_NOTE_LENGTH = 500;
 
 export async function GET(req: NextRequest) {

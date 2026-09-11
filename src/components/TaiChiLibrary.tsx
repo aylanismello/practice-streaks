@@ -5,8 +5,11 @@ import {
   buildYang24Lessons,
   CHEN18_LESSONS,
   CHEN18_PLAYLIST_URL,
+  EIGHT_BROCADES_LESSONS,
   formatTaiChiTimestamp,
   getYouTubeVideoId,
+  SIX_HEALING_SOUNDS_LESSONS,
+  TAI_CHI_10_LESSONS,
   type TaiChiFormId,
   type TaiChiLesson,
   type TaiChiMark,
@@ -16,9 +19,19 @@ import {
 import { YouTubeStudyPlayer, type YouTubeStudyPlayerHandle } from "@/components/YouTubeStudyPlayer";
 
 const FORM_META = {
-  yang24: { title: "Yang 24", playlist: YANG24_PLAYLIST_URL },
-  chen18: { title: "Chen 18", playlist: CHEN18_PLAYLIST_URL },
+  yang24: { title: "Yang 24", sourceUrl: YANG24_PLAYLIST_URL, sourceLabel: "Playlist ↗", singleVideo: false },
+  chen18: { title: "Chen 18", sourceUrl: CHEN18_PLAYLIST_URL, sourceLabel: "Playlist ↗", singleVideo: false },
+  taichi10: { title: "Tai Chi 10", sourceUrl: "https://youtu.be/f3m-ZImsr_M", sourceLabel: "Video ↗", singleVideo: true },
+  six_healing_sounds: { title: "6 Healing Sounds Qigong", sourceUrl: "https://youtu.be/XDI6PMD7Blg", sourceLabel: "Video ↗", singleVideo: true },
+  eight_brocades: { title: "8 Brocades Qigong", sourceUrl: "https://youtu.be/8-bZxZZuZwY", sourceLabel: "Video ↗", singleVideo: true },
 } as const;
+
+const FIXED_LESSONS: Record<Exclude<TaiChiFormId, "yang24">, readonly TaiChiLesson[]> = {
+  chen18: CHEN18_LESSONS,
+  taichi10: TAI_CHI_10_LESSONS,
+  six_healing_sounds: SIX_HEALING_SOUNDS_LESSONS,
+  eight_brocades: EIGHT_BROCADES_LESSONS,
+};
 
 export function TaiChiLibrary() {
   const [formId, setFormId] = useState<TaiChiFormId>("yang24");
@@ -46,7 +59,7 @@ export function TaiChiLibrary() {
   }, []);
 
   const lessons = useMemo<readonly TaiChiLesson[]>(
-    () => formId === "yang24" ? buildYang24Lessons(moveLinks) : CHEN18_LESSONS,
+    () => formId === "yang24" ? buildYang24Lessons(moveLinks) : FIXED_LESSONS[formId],
     [formId, moveLinks]
   );
 
@@ -151,7 +164,7 @@ export function TaiChiLibrary() {
 
   return (
     <div className="animate-fade-in">
-      <div className="grid grid-cols-2 gap-2 mb-6">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {(Object.keys(FORM_META) as TaiChiFormId[]).map((id) => {
           const selected = formId === id;
           return (
@@ -174,22 +187,22 @@ export function TaiChiLibrary() {
       <div className="mb-6 flex items-start justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5 md:p-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{FORM_META[formId].title}</h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Study the form. Mark exact moments worth revisiting.</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Study the practice. Mark exact moments worth revisiting.</p>
         </div>
         <a
-          href={FORM_META[formId].playlist}
+          href={FORM_META[formId].sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--text-muted)]"
         >
-          Playlist ↗
+          {FORM_META[formId].sourceLabel}
         </a>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3">
           <div className="mb-2 px-2 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-            {lessons.length} lessons
+            {lessons.length} {lessons.length === 1 ? "video" : "lessons"}
           </div>
           <div className="max-h-[70vh] space-y-1 overflow-y-auto pr-1">
             {lessons.map((lesson) => {
@@ -227,7 +240,9 @@ export function TaiChiLibrary() {
           <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 md:p-5">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-amber-400">Movement {selectedLesson?.label}</div>
+                <div className="text-[10px] uppercase tracking-wider text-amber-400">
+                  {FORM_META[formId].singleVideo ? "Full practice" : `Movement ${selectedLesson?.label}`}
+                </div>
                 <h2 className="text-lg font-semibold">{selectedLesson?.name}</h2>
               </div>
               {selectedLesson?.youtubeUrl && (
