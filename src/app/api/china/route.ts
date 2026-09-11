@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const supabase = createServiceClient();
+
+    if (req.nextUrl.searchParams.get("links") === "1") {
+      const { data, error } = await supabase
+        .from("china_move_links")
+        .select("move_number, youtube_url")
+        .order("move_number", { ascending: true });
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json(data);
+    }
 
     let { data, error } = await supabase
       .from("china_prep")

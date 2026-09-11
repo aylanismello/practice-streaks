@@ -1582,6 +1582,12 @@ const YANG24_MOVES = [
   { number: 24, name: "Closing Form" },
 ] as const;
 
+const YANG24_LESSONS = YANG24_MOVES
+  .filter((move) => move.number !== 8)
+  .map((move) => move.number === 7
+    ? { number: 7, label: "7–8", name: "Grasp the Sparrow's Tail + Single Whip" }
+    : { number: move.number, label: String(move.number), name: move.name });
+
 function getChinaProgressMove(moveNumber: number | null | undefined) {
   if (!moveNumber) return null;
   if (moveNumber === 7 || moveNumber === 8) return 8;
@@ -1595,6 +1601,9 @@ function formatChinaMove(moveNumber: number | null | undefined) {
 
 function getYang24Move(moveNumber: number | null | undefined) {
   if (!moveNumber) return null;
+  if (moveNumber === 7 || moveNumber === 8) {
+    return { number: 7, name: "Grasp the Sparrow's Tail + Single Whip" };
+  }
   return YANG24_MOVES.find((move) => move.number === moveNumber) ?? null;
 }
 
@@ -1625,7 +1634,7 @@ function getMoveUrlLabel(url: string) {
   }
 }
 
-function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean; youtube_url?: string | null }) => void; onDelete: (date: string) => Promise<void>; }) {
+function ChinaPrepView({ entries, moveLinks, onSave, onDelete, onClose }: { entries: ChinaPrepEntry[]; moveLinks: ChinaMoveLink[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean; youtube_url?: string | null }) => void; onDelete: (date: string) => Promise<void>; onClose: () => void; }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [moveInput, setMoveInput] = useState("");
   const [fullRunInput, setFullRunInput] = useState(false);
@@ -1637,7 +1646,9 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
   const validMoveNumber = parsedMoveNumber && !isNaN(parsedMoveNumber) ? parsedMoveNumber : null;
   const selectedMove = getYang24Move(validMoveNumber);
   const selectedEntry = selectedDay ? entries.find((entry) => entry.date === selectedDay) ?? null : null;
-  const savedLinkUrl = selectedEntry?.youtube_url ?? null;
+  const moveLinkMap = new Map(moveLinks.map((link) => [link.move_number, link.youtube_url]));
+  const savedLinkUrl = selectedEntry?.youtube_url
+    ?? (validMoveNumber ? moveLinkMap.get(validMoveNumber) ?? null : null);
   const normalizedLinkDraft = normalizeYouTubeUrl(linkInput);
   const openSavedUrl = savedLinkUrl
     ? (savedLinkUrl.startsWith("http") ? savedLinkUrl : `https://${savedLinkUrl}`)
@@ -1739,6 +1750,13 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
 
   return (
     <div className="animate-fade-in">
+      <button
+        onClick={onClose}
+        className="mb-4 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+      >
+        ← Practice dashboard
+      </button>
+
       {/* Progress Header */}
       <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-5 md:p-6 mb-6">
         <div className="flex items-center justify-between mb-3">
@@ -1776,6 +1794,46 @@ function ChinaPrepView({ entries, onSave, onDelete }: { entries: ChinaPrepEntry[
         </div>
         <div className="text-[10px] text-[var(--text-muted)] mt-1.5 text-right">
           {currentMove}/23 moves
+        </div>
+      </div>
+
+      {/* Yang 24 video library */}
+      <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 md:p-5 mb-6">
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <div>
+            <div className="font-semibold">Yang 24 video library</div>
+            <div className="text-xs text-[var(--text-muted)]">Movements 7–8 are one combined lesson.</div>
+          </div>
+          <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">23 lessons</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {YANG24_LESSONS.map((lesson) => {
+            const url = moveLinkMap.get(lesson.number);
+            return url ? (
+              <a
+                key={lesson.label}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:border-amber-400/50"
+                style={{ background: "var(--bg)", borderColor: "var(--border)" }}
+              >
+                <span className="w-8 flex-shrink-0 text-center font-mono text-xs font-semibold text-amber-400">{lesson.label}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{lesson.name}</span>
+                <span className="text-xs text-[var(--text-muted)]">↗</span>
+              </a>
+            ) : (
+              <div
+                key={lesson.label}
+                className="flex items-center gap-3 rounded-lg border px-3 py-2.5 opacity-45"
+                style={{ background: "var(--bg)", borderColor: "var(--border)" }}
+              >
+                <span className="w-8 flex-shrink-0 text-center font-mono text-xs font-semibold">{lesson.label}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{lesson.name}</span>
+                <span className="text-[10px] text-[var(--text-muted)]">missing</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -2017,6 +2075,7 @@ export default function Dashboard() {
   const [focusmateData, setFocusmateData] = useState<FocusmateData | null>(null);
   const [chinaMode, setChinaMode] = useState(false);
   const [chinaEntries, setChinaEntries] = useState<ChinaPrepEntry[]>([]);
+  const [chinaMoveLinks, setChinaMoveLinks] = useState<ChinaMoveLink[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [flowOpen, setFlowOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -2110,10 +2169,17 @@ export default function Dashboard() {
 
   const fetchChinaData = useCallback(async () => {
     try {
-      const entriesRes = await fetch("/api/china");
+      const [entriesRes, linksRes] = await Promise.all([
+        fetch("/api/china"),
+        fetch("/api/china?links=1"),
+      ]);
       if (entriesRes.ok) {
         const data = await entriesRes.json();
         setChinaEntries(data);
+      }
+      if (linksRes.ok) {
+        const data = await linksRes.json();
+        setChinaMoveLinks(data);
       }
     } catch { /* ignore */ }
   }, []);
@@ -2518,7 +2584,13 @@ export default function Dashboard() {
       </div>
 
       {chinaMode ? (
-        <ChinaPrepView entries={chinaEntries} onSave={handleChinaSave} onDelete={handleChinaDelete} />
+        <ChinaPrepView
+          entries={chinaEntries}
+          moveLinks={chinaMoveLinks}
+          onSave={handleChinaSave}
+          onDelete={handleChinaDelete}
+          onClose={() => setChinaMode(false)}
+        />
       ) : (<>
 
       {/* Tonight card — only after 9 PM */}
@@ -2569,6 +2641,18 @@ export default function Dashboard() {
                   </a>
                 )}
               </div>
+              {practice.name === "Forms" && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setChinaMode(true);
+                  }}
+                  className="mt-2 rounded-full border px-2.5 py-1 text-[11px] font-medium text-amber-400 transition-colors hover:border-amber-400/60"
+                  style={{ background: "var(--bg)", borderColor: "var(--border)" }}
+                >
+                  Open form library ↗
+                </button>
+              )}
               {streak > 0 && (
                 <div className="text-xs md:text-sm mt-1 text-[var(--text-muted)]">
                   {streak}d streak
