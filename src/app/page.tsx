@@ -14,6 +14,7 @@ import {
 } from "@/lib/dates";
 import type { ViewMode } from "@/lib/dates";
 import { WEEKLY_PRACTICE_IDS } from "@/lib/weekly-practices";
+import { CHEN18_LESSONS, CHEN18_PLAYLIST_URL } from "@/lib/tai-chi-forms";
 import { WeeklyPracticesCard } from "@/components/WeeklyPracticesCard";
 
 const WIND_DOWN = "23:00"; // 11:00 PM — no screens
@@ -1635,6 +1636,7 @@ function getMoveUrlLabel(url: string) {
 }
 
 function ChinaPrepView({ entries, moveLinks, onSave, onDelete, onClose }: { entries: ChinaPrepEntry[]; moveLinks: ChinaMoveLink[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean; youtube_url?: string | null }) => void; onDelete: (date: string) => Promise<void>; onClose: () => void; }) {
+  const [selectedForm, setSelectedForm] = useState<"yang24" | "chen18">("yang24");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [moveInput, setMoveInput] = useState("");
   const [fullRunInput, setFullRunInput] = useState(false);
@@ -1746,6 +1748,96 @@ function ChinaPrepView({ entries, moveLinks, onSave, onDelete, onClose }: { entr
     setSelectedDay(null);
   }
 
+  const formSelector = (
+    <div className="grid grid-cols-2 gap-2 mb-6">
+      {([
+        { id: "yang24", label: "Yang 24" },
+        { id: "chen18", label: "Chen 18" },
+      ] as const).map((form) => {
+        const selected = selectedForm === form.id;
+        return (
+          <button
+            key={form.id}
+            onClick={() => setSelectedForm(form.id)}
+            className="rounded-xl border px-4 py-3 text-sm font-semibold transition-colors"
+            style={{
+              background: selected ? "rgba(245, 158, 11, 0.12)" : "var(--bg-card)",
+              borderColor: selected ? "rgba(245, 158, 11, 0.55)" : "var(--border)",
+              color: selected ? "#f59e0b" : "var(--text-muted)",
+            }}
+          >
+            {form.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  if (selectedForm === "chen18") {
+    return (
+      <div className="animate-fade-in">
+        <button
+          onClick={onClose}
+          className="mb-4 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+        >
+          ← Practice dashboard
+        </button>
+
+        {formSelector}
+
+        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-5 md:p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-2xl md:text-3xl font-semibold tracking-tight">
+                Chen <span className="text-amber-400">18</span>
+              </div>
+              <div className="text-xs text-[var(--text-muted)] mt-0.5 uppercase tracking-wider">
+                Chen 18 Form
+              </div>
+              <div className="text-sm text-[var(--text-muted)] mt-1">18 movement lessons</div>
+            </div>
+            <a
+              href={CHEN18_PLAYLIST_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open Chen 18 YouTube playlist"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors"
+              style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+              title="Open YouTube playlist"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+                <path d="M21.8 8.5s-.2-1.4-.8-2c-.8-.8-1.7-.8-2.1-.9C16 5.3 12 5.3 12 5.3h0s-4 0-6.9.3c-.4 0-1.3.1-2.1.9-.6.6-.8 2-.8 2S2 10.1 2 11.6v.8c0 1.5.2 3.1.2 3.1s.2 1.4.8 2c.8.8 1.8.8 2.2.9 1.6.2 6.8.3 6.8.3s4 0 6.9-.3c.4 0 1.3-.1 2.1-.9.6-.6.8-2 .8-2s.2-1.6.2-3.1v-.8c0-1.5-.2-3.1-.2-3.1zM9.6 14.1V9.8l4.5 2.2-4.5 2.1z" />
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 md:p-5 mb-6">
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <div className="font-semibold">Chen 18 video library</div>
+            <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">18 lessons</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {CHEN18_LESSONS.map((lesson) => (
+              <a
+                key={lesson.number}
+                href={lesson.youtubeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:border-amber-400/50"
+                style={{ background: "var(--bg)", borderColor: "var(--border)" }}
+              >
+                <span className="w-8 flex-shrink-0 text-center font-mono text-xs font-semibold text-amber-400">{lesson.label}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{lesson.name}</span>
+                <span className="text-xs text-[var(--text-muted)]">↗</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in">
       <button
@@ -1754,6 +1846,8 @@ function ChinaPrepView({ entries, moveLinks, onSave, onDelete, onClose }: { entr
       >
         ← Practice dashboard
       </button>
+
+      {formSelector}
 
       {/* Progress Header */}
       <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-5 md:p-6 mb-6">
