@@ -1647,6 +1647,7 @@ function ChinaPrepView({ entries, moveLinks, onSave, onDelete, onClose }: { entr
   const selectedMove = getYang24Move(validMoveNumber);
   const selectedEntry = selectedDay ? entries.find((entry) => entry.date === selectedDay) ?? null : null;
   const moveLinkMap = new Map(moveLinks.map((link) => [link.move_number, link.youtube_url]));
+  const linkedLessonCount = YANG24_LESSONS.filter((lesson) => moveLinkMap.get(lesson.number)).length;
   const savedLinkUrl = selectedEntry?.youtube_url
     ?? (validMoveNumber ? moveLinkMap.get(validMoveNumber) ?? null : null);
   const normalizedLinkDraft = normalizeYouTubeUrl(linkInput);
@@ -1665,9 +1666,6 @@ function ChinaPrepView({ entries, moveLinks, onSave, onDelete, onClose }: { entr
   const defaultMonth = now.getMonth() === 4 || (now.getMonth() === 4 && now.getDate() > 21) ? 1 : now.getMonth() >= 5 ? 1 : 0;
   const [monthIndex, setMonthIndex] = useState(defaultMonth);
 
-  const tripDate = new Date("2026-05-21T00:00:00");
-  const diffMs = tripDate.getTime() - now.getTime();
-  const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   const todayStr = formatDateLocal(now);
 
   // Compute stats
@@ -1840,7 +1838,7 @@ function ChinaPrepView({ entries, moveLinks, onSave, onDelete, onClose }: { entr
       {/* Stats Row */}
       <div className="grid grid-cols-4 gap-2 mb-6">
         {[
-          { label: "Days left", value: daysRemaining },
+          { label: "Videos", value: `${linkedLessonCount}/23` },
           { label: "Days practiced", value: practiceDays },
           { label: "Current move", value: `${currentMove}/23` },
           { label: "Full runs", value: fullRuns },
