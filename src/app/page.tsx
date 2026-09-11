@@ -14,7 +14,6 @@ import {
 } from "@/lib/dates";
 import type { ViewMode } from "@/lib/dates";
 import { WEEKLY_PRACTICE_IDS } from "@/lib/weekly-practices";
-import { CHEN18_LESSONS, CHEN18_PLAYLIST_URL } from "@/lib/tai-chi-forms";
 import { WeeklyPracticesCard } from "@/components/WeeklyPracticesCard";
 
 const WIND_DOWN = "23:00"; // 11:00 PM — no screens
@@ -1543,618 +1542,6 @@ function TripCountdown({ inline }: { inline?: boolean }) {
   );
 }
 
-interface ChinaPrepEntry {
-  date: string;
-  move_learned: number | null;
-  full_run: boolean;
-  notes: string | null;
-  youtube_url?: string | null;
-}
-
-interface ChinaMoveLink {
-  move_number: number;
-  youtube_url: string | null;
-}
-
-const YANG24_MOVES = [
-  { number: 1, name: "Commencement" },
-  { number: 2, name: "Part the Wild Horse's Mane" },
-  { number: 3, name: "White Crane Spreads Wings" },
-  { number: 4, name: "Brush Knee and Push" },
-  { number: 5, name: "Play the Lute" },
-  { number: 6, name: "Step Back and Repulse Monkey" },
-  { number: 7, name: "Grasp the Sparrow's Tail" },
-  { number: 8, name: "Single Whip" },
-  { number: 9, name: "Wave Hands Like Clouds" },
-  { number: 10, name: "Single Whip" },
-  { number: 11, name: "High Pat on Horse" },
-  { number: 12, name: "Kick With Right Heel" },
-  { number: 13, name: "Strike Ears with Both Fists" },
-  { number: 14, name: "Turn Body and Left Leg Kick" },
-  { number: 15, name: "Left Lower Stance" },
-  { number: 16, name: "Golden Rooster Stands on One Leg" },
-  { number: 17, name: "Right Lower Stance" },
-  { number: 18, name: "Snake Creeps Down" },
-  { number: 19, name: "Step Forward" },
-  { number: 20, name: "Deflect Down" },
-  { number: 21, name: "Parry and Punch" },
-  { number: 22, name: "Apparent Close Up" },
-  { number: 23, name: "Cross Hands" },
-  { number: 24, name: "Closing Form" },
-] as const;
-
-const YANG24_LESSONS = YANG24_MOVES
-  .filter((move) => move.number !== 8)
-  .map((move) => move.number === 7
-    ? { number: 7, label: "7–8", name: "Grasp the Sparrow's Tail + Single Whip" }
-    : { number: move.number, label: String(move.number), name: move.name });
-
-function getChinaProgressMove(moveNumber: number | null | undefined) {
-  if (!moveNumber) return null;
-  if (moveNumber === 7 || moveNumber === 8) return 8;
-  return moveNumber;
-}
-
-function formatChinaMove(moveNumber: number | null | undefined) {
-  if (!moveNumber) return "";
-  return moveNumber === 7 || moveNumber === 8 ? "7-8" : String(moveNumber);
-}
-
-function getYang24Move(moveNumber: number | null | undefined) {
-  if (!moveNumber) return null;
-  if (moveNumber === 7 || moveNumber === 8) {
-    return { number: 7, name: "Grasp the Sparrow's Tail + Single Whip" };
-  }
-  return YANG24_MOVES.find((move) => move.number === moveNumber) ?? null;
-}
-
-function normalizeYouTubeUrl(input: string): string {
-  const trimmed = input.trim();
-  if (!trimmed) return "";
-  try {
-    const url = new URL(trimmed);
-    if (url.hostname.includes("youtube.com") || url.hostname.includes("youtu.be")) return url.toString();
-  } catch {
-    return trimmed;
-  }
-  return trimmed;
-}
-
-function getMondayStartPadding(dateStr: string): number {
-  const d = new Date(dateStr + "T12:00:00");
-  return (d.getDay() + 6) % 7;
-}
-
-function getMoveUrlLabel(url: string) {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname.includes("youtu.be")) return parsed.pathname.replace("/", "") || parsed.hostname;
-    return parsed.hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
-
-function ChinaPrepView({ entries, moveLinks, onSave, onDelete, onClose }: { entries: ChinaPrepEntry[]; moveLinks: ChinaMoveLink[]; onSave: (entry: { date: string; move_learned?: number; full_run?: boolean; youtube_url?: string | null }) => void; onDelete: (date: string) => Promise<void>; onClose: () => void; }) {
-  const [selectedForm, setSelectedForm] = useState<"yang24" | "chen18">("yang24");
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [moveInput, setMoveInput] = useState("");
-  const [fullRunInput, setFullRunInput] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [linkInput, setLinkInput] = useState("");
-
-  const parsedMoveNumber = moveInput ? parseInt(moveInput, 10) : null;
-  const validMoveNumber = parsedMoveNumber && !isNaN(parsedMoveNumber) ? parsedMoveNumber : null;
-  const selectedMove = getYang24Move(validMoveNumber);
-  const selectedEntry = selectedDay ? entries.find((entry) => entry.date === selectedDay) ?? null : null;
-  const moveLinkMap = new Map(moveLinks.map((link) => [link.move_number, link.youtube_url]));
-  const linkedLessonCount = YANG24_LESSONS.filter((lesson) => moveLinkMap.get(lesson.number)).length;
-  const savedLinkUrl = selectedEntry?.youtube_url
-    ?? (validMoveNumber ? moveLinkMap.get(validMoveNumber) ?? null : null);
-  const normalizedLinkDraft = normalizeYouTubeUrl(linkInput);
-  const openSavedUrl = savedLinkUrl
-    ? (savedLinkUrl.startsWith("http") ? savedLinkUrl : `https://${savedLinkUrl}`)
-    : null;
-
-  // Sync link input with the saved link for the currently selected day
-  useEffect(() => {
-    if (!selectedDay) return;
-    setLinkInput(savedLinkUrl ?? "");
-  }, [selectedDay, validMoveNumber, savedLinkUrl]);
-
-  // Single-month navigation: 0 = April, 1 = May
-  const now = new Date();
-  const defaultMonth = now.getMonth() === 4 || (now.getMonth() === 4 && now.getDate() > 21) ? 1 : now.getMonth() >= 5 ? 1 : 0;
-  const [monthIndex, setMonthIndex] = useState(defaultMonth);
-
-  const todayStr = formatDateLocal(now);
-
-  // Compute stats
-  const currentMove = entries.reduce((max, e) => {
-    const progressMove = getChinaProgressMove(e.move_learned);
-    return progressMove && progressMove > max ? progressMove : max;
-  }, 0);
-  const fullRuns = entries.filter((e) => e.full_run).length;
-  const practiceDays = entries.length;
-
-  // Entry lookup
-  const entryByDate = new Map(entries.map((e) => [e.date, e]));
-
-  // Buffer week: May 18-21
-  const bufferDays = new Set(["2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21"]);
-
-  // Build the two months
-  const monthConfigs = [
-    { label: "APRIL 2026", year: 2026, month: 3 }, // JS month 3 = April
-    { label: "MAY 2026", year: 2026, month: 4 },   // JS month 4 = May
-  ];
-
-  function buildMonthDays(year: number, month: number): (string | null)[] {
-    const firstOfMonth = new Date(year, month, 1);
-    const startDow = getMondayStartPadding(`${year}-${String(month + 1).padStart(2, "0")}-01`);
-    const cells: (string | null)[] = [];
-    for (let i = 0; i < startDow; i++) cells.push(null);
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const lastDay = month === 4 ? 21 : daysInMonth; // May: only up to 21
-    for (let d = 1; d <= lastDay; d++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      cells.push(dateStr);
-    }
-    return cells;
-  }
-
-  const currentMonthConfig = monthConfigs[monthIndex];
-  const monthDays = buildMonthDays(currentMonthConfig.year, currentMonthConfig.month);
-  const yang24PlaylistUrl = "https://www.youtube.com/playlist?list=PL7dztrxiJ7iyErVqv9H2LhxfsfRqYnMSG&si=wf9wOfBui4FwAMXn";
-
-  function handleDayClick(day: string) {
-    const existing = entryByDate.get(day);
-    setSelectedDay(day);
-    if (existing) {
-      setMoveInput(String(existing.move_learned ?? ""));
-      setFullRunInput(existing.full_run || false);
-    } else {
-      setMoveInput(currentMove < 23 ? String(currentMove + 1) : "");
-      setFullRunInput(false);
-    }
-  }
-
-  function closeModal() {
-    setSelectedDay(null);
-  }
-
-  async function handleSave() {
-    if (!selectedDay) return;
-    setSaving(true);
-    const payload: { date: string; move_learned?: number; full_run?: boolean; youtube_url?: string | null } = { date: selectedDay };
-    const mv = parseInt(moveInput, 10);
-    const move = isNaN(mv) ? null : mv;
-    if (move && move > 0 && move <= 23 && move <= currentMove + 1) {
-      payload.move_learned = move;
-    }
-    payload.full_run = fullRunInput;
-    payload.youtube_url = normalizedLinkDraft || null;
-    await onSave(payload);
-    setSaving(false);
-    setSelectedDay(null);
-  }
-
-  async function handleDelete() {
-    if (!selectedDay) return;
-    setDeleting(true);
-    await onDelete(selectedDay);
-    setDeleting(false);
-    setSelectedDay(null);
-  }
-
-  const formSelector = (
-    <div className="grid grid-cols-2 gap-2 mb-6">
-      {([
-        { id: "yang24", label: "Yang 24" },
-        { id: "chen18", label: "Chen 18" },
-      ] as const).map((form) => {
-        const selected = selectedForm === form.id;
-        return (
-          <button
-            key={form.id}
-            onClick={() => setSelectedForm(form.id)}
-            className="rounded-xl border px-4 py-3 text-sm font-semibold transition-colors"
-            style={{
-              background: selected ? "rgba(245, 158, 11, 0.12)" : "var(--bg-card)",
-              borderColor: selected ? "rgba(245, 158, 11, 0.55)" : "var(--border)",
-              color: selected ? "#f59e0b" : "var(--text-muted)",
-            }}
-          >
-            {form.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-
-  if (selectedForm === "chen18") {
-    return (
-      <div className="animate-fade-in">
-        <button
-          onClick={onClose}
-          className="mb-4 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-        >
-          ← Practice dashboard
-        </button>
-
-        {formSelector}
-
-        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-5 md:p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-2xl md:text-3xl font-semibold tracking-tight">
-                Chen <span className="text-amber-400">18</span>
-              </div>
-              <div className="text-xs text-[var(--text-muted)] mt-0.5 uppercase tracking-wider">
-                Chen 18 Form
-              </div>
-              <div className="text-sm text-[var(--text-muted)] mt-1">18 movement lessons</div>
-            </div>
-            <a
-              href={CHEN18_PLAYLIST_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Open Chen 18 YouTube playlist"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors"
-              style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-muted)" }}
-              title="Open YouTube playlist"
-            >
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
-                <path d="M21.8 8.5s-.2-1.4-.8-2c-.8-.8-1.7-.8-2.1-.9C16 5.3 12 5.3 12 5.3h0s-4 0-6.9.3c-.4 0-1.3.1-2.1.9-.6.6-.8 2-.8 2S2 10.1 2 11.6v.8c0 1.5.2 3.1.2 3.1s.2 1.4.8 2c.8.8 1.8.8 2.2.9 1.6.2 6.8.3 6.8.3s4 0 6.9-.3c.4 0 1.3-.1 2.1-.9.6-.6.8-2 .8-2s.2-1.6.2-3.1v-.8c0-1.5-.2-3.1-.2-3.1zM9.6 14.1V9.8l4.5 2.2-4.5 2.1z" />
-              </svg>
-            </a>
-          </div>
-        </div>
-
-        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 md:p-5 mb-6">
-          <div className="flex items-baseline justify-between gap-3 mb-3">
-            <div className="font-semibold">Chen 18 video library</div>
-            <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">18 lessons</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {CHEN18_LESSONS.map((lesson) => (
-              <a
-                key={lesson.number}
-                href={lesson.youtubeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:border-amber-400/50"
-                style={{ background: "var(--bg)", borderColor: "var(--border)" }}
-              >
-                <span className="w-8 flex-shrink-0 text-center font-mono text-xs font-semibold text-amber-400">{lesson.label}</span>
-                <span className="min-w-0 flex-1 truncate text-sm">{lesson.name}</span>
-                <span className="text-xs text-[var(--text-muted)]">↗</span>
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="animate-fade-in">
-      <button
-        onClick={onClose}
-        className="mb-4 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-      >
-        ← Practice dashboard
-      </button>
-
-      {formSelector}
-
-      {/* Progress Header */}
-      <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-5 md:p-6 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="text-2xl md:text-3xl font-semibold tracking-tight">
-              Move <span className="text-amber-400">{currentMove}</span> of 23
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-0.5 uppercase tracking-wider">
-              Yang 24 Form
-            </div>
-            <div className="text-sm text-[var(--text-muted)] mt-1">
-              {fullRuns} full run{fullRuns !== 1 ? "s" : ""}
-            </div>
-          </div>
-          <a
-            href={yang24PlaylistUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Open Yang 24 YouTube playlist"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors"
-            style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-muted)" }}
-            title="Open YouTube playlist"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
-              <path d="M21.8 8.5s-.2-1.4-.8-2c-.8-.8-1.7-.8-2.1-.9C16 5.3 12 5.3 12 5.3h0s-4 0-6.9.3c-.4 0-1.3.1-2.1.9-.6.6-.8 2-.8 2S2 10.1 2 11.6v.8c0 1.5.2 3.1.2 3.1s.2 1.4.8 2c.8.8 1.8.8 2.2.9 1.6.2 6.8.3 6.8.3s4 0 6.9-.3c.4 0 1.3-.1 2.1-.9.6-.6.8-2 .8-2s.2-1.6.2-3.1v-.8c0-1.5-.2-3.1-.2-3.1zM9.6 14.1V9.8l4.5 2.2-4.5 2.1z" />
-            </svg>
-          </a>
-        </div>
-        {/* Progress bar */}
-        <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${(currentMove / 23) * 100}%`, background: "#f59e0b" }}
-          />
-        </div>
-        <div className="text-[10px] text-[var(--text-muted)] mt-1.5 text-right">
-          {currentMove}/23 moves
-        </div>
-      </div>
-
-      {/* Yang 24 video library */}
-      <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 md:p-5 mb-6">
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <div>
-            <div className="font-semibold">Yang 24 video library</div>
-            <div className="text-xs text-[var(--text-muted)]">Movements 7–8 are one combined lesson.</div>
-          </div>
-          <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">23 lessons</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {YANG24_LESSONS.map((lesson) => {
-            const url = moveLinkMap.get(lesson.number);
-            return url ? (
-              <a
-                key={lesson.label}
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:border-amber-400/50"
-                style={{ background: "var(--bg)", borderColor: "var(--border)" }}
-              >
-                <span className="w-8 flex-shrink-0 text-center font-mono text-xs font-semibold text-amber-400">{lesson.label}</span>
-                <span className="min-w-0 flex-1 truncate text-sm">{lesson.name}</span>
-                <span className="text-xs text-[var(--text-muted)]">↗</span>
-              </a>
-            ) : (
-              <div
-                key={lesson.label}
-                className="flex items-center gap-3 rounded-lg border px-3 py-2.5 opacity-45"
-                style={{ background: "var(--bg)", borderColor: "var(--border)" }}
-              >
-                <span className="w-8 flex-shrink-0 text-center font-mono text-xs font-semibold">{lesson.label}</span>
-                <span className="min-w-0 flex-1 truncate text-sm">{lesson.name}</span>
-                <span className="text-[10px] text-[var(--text-muted)]">missing</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-2 mb-6">
-        {[
-          { label: "Videos", value: `${linkedLessonCount}/23` },
-          { label: "Days practiced", value: practiceDays },
-          { label: "Current move", value: `${currentMove}/23` },
-          { label: "Full runs", value: fullRuns },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-xl p-3 text-center"
-            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-          >
-            <div className="text-lg md:text-xl font-semibold tabular-nums">{stat.value}</div>
-            <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Single Month Calendar */}
-      <div className="mb-4">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wider mb-2">
-          <span className="text-[var(--text-muted)]">{currentMonthConfig.label}</span>
-          {monthIndex > 0 && (
-            <button
-              onClick={() => setMonthIndex(monthIndex - 1)}
-              className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-sm px-1"
-            >
-              &lsaquo;
-            </button>
-          )}
-          {monthIndex < 1 && (
-            <button
-              onClick={() => setMonthIndex(monthIndex + 1)}
-              className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-sm px-1"
-            >
-              &rsaquo;
-            </button>
-          )}
-        </div>
-        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-3 md:p-4">
-          {/* Day headers */}
-          <div className="grid grid-cols-7 gap-1 mb-1">
-            {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-              <div key={i} className="text-center text-[10px] text-[var(--text-muted)] pb-1">{d}</div>
-            ))}
-          </div>
-          {/* Day cells */}
-          <div className="grid grid-cols-7 gap-1">
-            {monthDays.map((day, i) => {
-              if (!day) return <div key={`empty-${i}`} />;
-              const entry = entryByDate.get(day);
-              const isToday = day === todayStr;
-              const isBuffer = bufferDays.has(day);
-              const isPast = day < todayStr;
-              const hasData = !!entry;
-
-              return (
-                <button
-                  key={day}
-                  onClick={() => handleDayClick(day)}
-                  className="relative aspect-square rounded-lg flex flex-col items-center justify-center text-xs transition-all duration-150"
-                  style={{
-                    background: isBuffer
-                      ? "rgba(139, 92, 246, 0.08)"
-                      : hasData
-                      ? "rgba(245, 158, 11, 0.06)"
-                      : "transparent",
-                    border: isToday
-                      ? "1px solid rgba(245, 158, 11, 0.4)"
-                      : hasData
-                      ? "1px solid rgba(245, 158, 11, 0.15)"
-                      : "1px solid var(--border)",
-                    opacity: isPast && !hasData ? 0.4 : 1,
-                    cursor: "pointer",
-                  }}
-                >
-                  <span className="text-[10px] text-[var(--text-muted)] leading-none mb-0.5">
-                    {parseInt(day.slice(8, 10), 10)}
-                  </span>
-                  {entry?.move_learned && (
-                    <span className="text-amber-400 font-semibold text-[11px] leading-none">
-                      {formatChinaMove(entry.move_learned)}
-                    </span>
-                  )}
-                  {entry?.full_run && (
-                    <span className="text-[10px] leading-none">⭐</span>
-                  )}
-                  {isBuffer && day === "2026-05-18" && (
-                    <span className="absolute -top-1 left-0 text-[7px] text-purple-400 font-medium">buf</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Modal overlay */}
-      {selectedDay && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0, 0, 0, 0.6)", backdropFilter: "blur(4px)" }}
-          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl p-5 animate-fade-in"
-            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-          >
-            <div className="text-base font-semibold mb-4">
-              {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-            </div>
-
-            <div className="flex flex-col gap-4 mb-5">
-              <label className="flex items-center gap-2 text-sm flex-wrap">
-                <span className="text-[var(--text-muted)]">Learn move</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={Math.min(23, currentMove + 1)}
-                  value={moveInput}
-                  onChange={(e) => setMoveInput(e.target.value)}
-                  className="w-14 rounded-lg px-2 py-1 text-center text-sm font-mono tabular-nums"
-                  style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)" }}
-                  placeholder="#"
-                />
-                {selectedMove && savedLinkUrl && (
-                  <a
-                    href={openSavedUrl ?? savedLinkUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Open saved YouTube link for move ${selectedMove.number}, ${selectedMove.name}`}
-                    title="Open saved YouTube link"
-                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors"
-                    style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-muted)" }}
-                  >
-                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
-                      <path d="M21.8 8.5s-.2-1.4-.8-2c-.8-.8-1.7-.8-2.1-.9C16 5.3 12 5.3 12 5.3h0s-4 0-6.9.3c-.4 0-1.3.1-2.1.9-.6.6-.8 2-.8 2S2 10.1 2 11.6v.8c0 1.5.2 3.1.2 3.1s.2 1.4.8 2c.8.8 1.8.8 2.2.9 1.6.2 6.8.3 6.8.3s4 0 6.9-.3c.4 0 1.3-.1 2.1-.9.6-.6.8-2 .8-2s.2-1.6.2-3.1v-.8c0-1.5-.2-3.1-.2-3.1zM9.6 14.1V9.8l4.5 2.2-4.5 2.1z" />
-                    </svg>
-                    <span className="max-w-[14rem] truncate">Saved link</span>
-                  </a>
-                )}
-              </label>
-              {selectedMove && (
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Saved YouTube link</span>
-                    <span className="text-[11px] text-[var(--text-muted)] truncate max-w-[60%]">
-                      {savedLinkUrl ? getMoveUrlLabel(savedLinkUrl) : "No saved link yet"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="url"
-                      value={linkInput}
-                      onChange={(e) => setLinkInput(e.target.value)}
-                      placeholder={`Paste link for move ${selectedMove.number}`}
-                      className="flex-1 min-w-0 rounded-md border px-2 py-1 text-xs bg-transparent outline-none"
-                      style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                    />
-                    <button
-                      disabled={!openSavedUrl}
-                      onClick={() => openSavedUrl && window.open(openSavedUrl, "_blank", "noopener,noreferrer")}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-30"
-                      style={{ borderColor: "var(--border)", background: "var(--bg)", color: "var(--text-muted)" }}
-                      title="Open saved link"
-                    >
-                      ↗
-                    </button>
-                  </div>
-                </div>
-              )}
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <button
-                  onClick={() => setFullRunInput(!fullRunInput)}
-                  className="w-6 h-6 rounded-md flex items-center justify-center text-xs transition-colors"
-                  style={{
-                    background: fullRunInput ? "rgba(245, 158, 11, 0.2)" : "var(--bg)",
-                    border: `1px solid ${fullRunInput ? "#f59e0b" : "var(--border)"}`,
-                    color: fullRunInput ? "#f59e0b" : "var(--text-muted)",
-                  }}
-                >
-                  {fullRunInput ? "\u2713" : ""}
-                </button>
-                <span className="text-[var(--text-muted)]">Full run</span>
-              </label>
-            </div>
-
-            <div className="flex gap-2 mb-3">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                style={{
-                  background: saving ? "var(--border)" : "#f59e0b",
-                  color: saving ? "var(--text-muted)" : "#000",
-                  cursor: saving ? "default" : "pointer",
-                }}
-              >
-                {saving ? "Saving..." : "Save"}
-              </button>
-              <button
-                onClick={closeModal}
-                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-muted)", cursor: "pointer" }}
-              >
-                Cancel
-              </button>
-            </div>
-
-            {entryByDate.has(selectedDay) && (
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="text-xs text-red-400 hover:text-red-300 transition-colors"
-              >
-                {deleting ? "Deleting..." : "Delete entry"}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Dashboard() {
   const [practices, setPractices] = useState<PracticeType[]>([]);
   const [logs, setLogs] = useState<PracticeLog[]>([]);
@@ -2165,9 +1552,6 @@ export default function Dashboard() {
   const [timeOffset, setTimeOffset] = useState(0);
   const [wotLogs, setWotLogs] = useState<WotEntry[]>([]);
   const [focusmateData, setFocusmateData] = useState<FocusmateData | null>(null);
-  const [chinaMode, setChinaMode] = useState(false);
-  const [chinaEntries, setChinaEntries] = useState<ChinaPrepEntry[]>([]);
-  const [chinaMoveLinks, setChinaMoveLinks] = useState<ChinaMoveLink[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [flowOpen, setFlowOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -2258,49 +1642,6 @@ export default function Dashboard() {
       setTogglingId(null);
     }
   }, [today, timeOffset, logs, practices]);
-
-  const fetchChinaData = useCallback(async () => {
-    try {
-      const [entriesRes, linksRes] = await Promise.all([
-        fetch("/api/china"),
-        fetch("/api/china?links=1"),
-      ]);
-      if (entriesRes.ok) {
-        const data = await entriesRes.json();
-        setChinaEntries(data);
-      }
-      if (linksRes.ok) {
-        const data = await linksRes.json();
-        setChinaMoveLinks(data);
-      }
-    } catch { /* ignore */ }
-  }, []);
-
-  const handleChinaSave = useCallback(async (entry: { date: string; move_learned?: number; full_run?: boolean; youtube_url?: string | null }) => {
-    try {
-      const res = await fetch("/api/china", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(entry),
-      });
-      if (res.ok) {
-        await fetchChinaData();
-      }
-    } catch { /* ignore */ }
-  }, [fetchChinaData]);
-
-  const handleChinaDelete = useCallback(async (date: string) => {
-    try {
-      const res = await fetch("/api/china", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date }),
-      });
-      if (res.ok) {
-        await fetchChinaData();
-      }
-    } catch { /* ignore */ }
-  }, [fetchChinaData]);
 
   const fetchFlowData = useCallback(async () => {
     try {
@@ -2528,15 +1869,12 @@ export default function Dashboard() {
       .then((data) => { if (data && !data.error) setFocusmateData(data); })
       .catch(() => {});
 
-    // Fetch China prep data (non-blocking)
-    fetchChinaData();
-
     // Fetch flow data (non-blocking)
     fetchFlowData();
 
     // Fetch active flow timer (non-blocking)
     fetchFlowActive();
-  }, [fetchChinaData, fetchFlowData, fetchFlowActive]);
+  }, [fetchFlowData, fetchFlowActive]);
 
   useEffect(() => {
     fetchData();
@@ -2619,7 +1957,7 @@ export default function Dashboard() {
         <div className="flex-1">
           <h1
             className="text-xl md:text-3xl font-semibold tracking-tight mb-0.5 md:mb-1 cursor-pointer hover:opacity-70 transition-opacity"
-            onClick={() => { setChinaMode(false); setTimeOffset(0); }}
+            onClick={() => setTimeOffset(0)}
           >
             A.F.M&apos;s Practice
           </h1>
@@ -2675,15 +2013,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {chinaMode ? (
-        <ChinaPrepView
-          entries={chinaEntries}
-          moveLinks={chinaMoveLinks}
-          onSave={handleChinaSave}
-          onDelete={handleChinaDelete}
-          onClose={() => setChinaMode(false)}
-        />
-      ) : (<>
+      <>
 
       {/* Tonight card — only after 9 PM */}
       <TonightCard logs={logs} practices={practices} today={today} sleepData={ouraData?.sleep ?? []} />
@@ -2734,16 +2064,14 @@ export default function Dashboard() {
                 )}
               </div>
               {practice.name === "Forms" && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setChinaMode(true);
-                  }}
-                  className="mt-2 rounded-full border px-2.5 py-1 text-[11px] font-medium text-amber-400 transition-colors hover:border-amber-400/60"
+                <Link
+                  href="/forms"
+                  onClick={(event) => event.stopPropagation()}
+                  className="mt-2 inline-block rounded-full border px-2.5 py-1 text-[11px] font-medium text-amber-400 transition-colors hover:border-amber-400/60"
                   style={{ background: "var(--bg)", borderColor: "var(--border)" }}
                 >
                   Open form library ↗
-                </button>
+                </Link>
               )}
               {streak > 0 && (
                 <div className="text-xs md:text-sm mt-1 text-[var(--text-muted)]">
@@ -3290,7 +2618,7 @@ export default function Dashboard() {
       </div>
 
 
-      </>)}
+      </>
     </main>
   );
 }
