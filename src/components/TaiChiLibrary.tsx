@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildYang24Lessons,
   CHEN18_LESSONS,
@@ -25,9 +25,10 @@ export function TaiChiLibrary() {
   const [moveLinks, setMoveLinks] = useState<Yang24MoveLink[]>([]);
   const [marks, setMarks] = useState<TaiChiMark[]>([]);
   const [selectedNumber, setSelectedNumber] = useState(1);
-  const [note, setNote] = useState("");
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [updatingMarkId, setUpdatingMarkId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const playerRef = useRef<YouTubeStudyPlayerHandle | null>(null);
 
@@ -62,14 +63,12 @@ export function TaiChiLibrary() {
   function selectForm(nextForm: TaiChiFormId) {
     setFormId(nextForm);
     setSelectedNumber(1);
-    setNote("");
+    setNoteDrafts({});
     setError(null);
   }
 
-  async function addMark(event: FormEvent) {
-    event.preventDefault();
-    const trimmedNote = note.trim();
-    if (!selectedLesson || !selectedVideoId || !trimmedNote) return;
+  async function addMark() {
+    if (!selectedLesson || !selectedVideoId) return;
 
     setSaving(true);
     setError(null);
@@ -83,17 +82,50 @@ export function TaiChiLibrary() {
           movement_number: selectedLesson.number,
           video_id: selectedVideoId,
           seconds,
-          note: trimmedNote,
+          note: "",
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save mark");
       setMarks((current) => [...current, data]);
-      setNote("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save mark");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function updateMarkNote(mark: TaiChiMark, nextNote: string) {
+    const note = nextNote.trim();
+    if (note === mark.note) {
+      setNoteDrafts((current) => {
+        const next = { ...current };
+        delete next[mark.id];
+        return next;
+      });
+      return;
+    }
+
+    setUpdatingMarkId(mark.id);
+    setError(null);
+    try {
+      const response = await fetch("/api/tai-chi-marks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: mark.id, note }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not update note");
+      setMarks((current) => current.map((item) => item.id === mark.id ? data : item));
+      setNoteDrafts((current) => {
+        const next = { ...current };
+        delete next[mark.id];
+        return next;
+      });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not update note");
+    } finally {
+      setUpdatingMarkId(null);
     }
   }
 
@@ -173,7 +205,7 @@ export function TaiChiLibrary() {
                   key={lesson.label}
                   type="button"
                   disabled={!videoId}
-                  onClick={() => { setSelectedNumber(lesson.number); setNote(""); setError(null); }}
+                  onClick={() => { setSelectedNumber(lesson.number); setNoteDrafts({}); setError(null); }}
                   className="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors disabled:opacity-35"
                   style={{
                     background: selected ? "rgba(245, 158, 11, 0.1)" : "var(--bg)",
@@ -215,25 +247,17 @@ export function TaiChiLibrary() {
           <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 md:p-5">
             <div className="mb-3">
               <h3 className="font-semibold">Study marks</h3>
-              <p className="text-xs text-[var(--text-muted)]">Pause anywhere, write what matters, and save the current timestamp.</p>
+              <p className="text-xs text-[var(--text-muted)]">Tap once to mark the current time. Add or edit notes afterward.</p>
             </div>
 
-            <form onSubmit={addMark} className="mb-4 flex flex-col gap-2 sm:flex-row">
-              <input
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                maxLength={500}
-                placeholder="e.g. weight finishes shifting before the turn"
-                className="min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-amber-400/60"
-              />
-              <button
-                type="submit"
-                disabled={saving || !selectedVideoId || !note.trim()}
-                className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {saving ? "Saving…" : "Mark current time"}
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={addMark}
+              disabled={saving || !selectedVideoId}
+              className="mb-4 w-full rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {saving ? "Marking…" : "Mark current time"}
+            </button>
 
             {error && <div className="mb-3 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs text-red-400">{error}</div>}
 
@@ -253,13 +277,19 @@ export function TaiChiLibrary() {
                     >
                       ▶ {formatTaiChiTimestamp(mark.seconds)}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => playerRef.current?.seekTo(mark.seconds)}
-                      className="min-w-0 flex-1 text-left text-sm"
-                    >
-                      {mark.note}
-                    </button>
+                    <input
+                      value={noteDrafts[mark.id] ?? mark.note}
+                      onChange={(event) => setNoteDrafts((current) => ({ ...current, [mark.id]: event.target.value }))}
+                      onBlur={(event) => updateMarkNote(mark, event.currentTarget.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") event.currentTarget.blur();
+                      }}
+                      disabled={updatingMarkId === mark.id}
+                      maxLength={500}
+                      placeholder="Add a note…"
+                      aria-label={`Note for mark at ${formatTaiChiTimestamp(mark.seconds)}`}
+                      className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-[var(--text-muted)] focus:border-amber-400/40 focus:bg-[var(--bg-card)] disabled:opacity-60"
+                    />
                     <button
                       type="button"
                       onClick={() => deleteMark(mark.id)}

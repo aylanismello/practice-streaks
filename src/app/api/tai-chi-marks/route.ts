@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(seconds)) {
       return NextResponse.json({ error: "invalid timestamp" }, { status: 400 });
     }
-    if (!note || note.length > MAX_NOTE_LENGTH) {
-      return NextResponse.json({ error: `note must be 1-${MAX_NOTE_LENGTH} characters` }, { status: 400 });
+    if (note.length > MAX_NOTE_LENGTH) {
+      return NextResponse.json({ error: `note must be at most ${MAX_NOTE_LENGTH} characters` }, { status: 400 });
     }
 
     const supabase = createServiceClient();
@@ -75,6 +75,34 @@ export async function POST(req: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const id = typeof body.id === "string" ? body.id : "";
+    const note = typeof body.note === "string" ? body.note.trim() : null;
+    if (!/^[0-9a-f-]{36}$/i.test(id)) {
+      return NextResponse.json({ error: "invalid mark id" }, { status: 400 });
+    }
+    if (note === null || note.length > MAX_NOTE_LENGTH) {
+      return NextResponse.json({ error: `note must be at most ${MAX_NOTE_LENGTH} characters` }, { status: 400 });
+    }
+
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("tai_chi_marks")
+      .update({ note })
+      .eq("id", id)
+      .select("id, form_id, movement_number, video_id, seconds, note, created_at")
+      .maybeSingle();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data) return NextResponse.json({ error: "mark not found" }, { status: 404 });
+    return NextResponse.json(data);
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
