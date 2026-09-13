@@ -5,8 +5,12 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 interface YouTubePlayerInstance {
   destroy: () => void;
   getCurrentTime: () => number;
+  getDuration: () => number;
+  getPlayerState: () => number;
+  pauseVideo: () => void;
   playVideo: () => void;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  unloadModule?: (module: string) => void;
 }
 
 interface YouTubeNamespace {
@@ -17,6 +21,7 @@ interface YouTubeNamespace {
       playerVars?: Record<string, number>;
       events?: {
         onReady?: (event: { target: YouTubePlayerInstance }) => void;
+        onStateChange?: (event: { data: number; target: YouTubePlayerInstance }) => void;
         onError?: () => void;
       };
     }
@@ -31,6 +36,11 @@ declare global {
 }
 
 let apiPromise: Promise<YouTubeNamespace> | null = null;
+
+function disableCaptions(player: YouTubePlayerInstance) {
+  player.unloadModule?.("captions");
+  player.unloadModule?.("cc");
+}
 
 function loadYouTubeApi(): Promise<YouTubeNamespace> {
   if (window.YT?.Player) return Promise.resolve(window.YT);
@@ -56,7 +66,9 @@ function loadYouTubeApi(): Promise<YouTubeNamespace> {
 
 export interface YouTubeStudyPlayerHandle {
   currentTime: () => number;
+  seekBy: (seconds: number) => void;
   seekTo: (seconds: number) => void;
+  togglePlayback: () => void;
 }
 
 export const YouTubeStudyPlayer = forwardRef<YouTubeStudyPlayerHandle, { videoId: string }>(
@@ -68,15 +80,30 @@ export const YouTubeStudyPlayer = forwardRef<YouTubeStudyPlayerHandle, { videoId
 
     useImperativeHandle(ref, () => ({
       currentTime: () => playerRef.current?.getCurrentTime() ?? currentTime,
+      seekBy: (seconds: number) => {
+        const player = playerRef.current;
+        if (!player) return;
+        const duration = player.getDuration();
+        const target = Math.max(0, Math.min(player.getCurrentTime() + seconds, duration || Infinity));
+        player.seekTo(target, true);
+        setCurrentTime(target);
+      },
       seekTo: (seconds: number) => {
         playerRef.current?.seekTo(seconds, true);
         playerRef.current?.playVideo();
+      },
+      togglePlayback: () => {
+        const player = playerRef.current;
+        if (!player) return;
+        if (player.getPlayerState() === 1) player.pauseVideo();
+        else player.playVideo();
       },
     }), [currentTime]);
 
     useEffect(() => {
       let cancelled = false;
       let poll: ReturnType<typeof setInterval> | null = null;
+      let captionTimer: ReturnType<typeof setTimeout> | null = null;
       setCurrentTime(0);
       setPlayerError(false);
 
@@ -85,14 +112,19 @@ export const YouTubeStudyPlayer = forwardRef<YouTubeStudyPlayerHandle, { videoId
         playerRef.current?.destroy();
         playerRef.current = new YT.Player(hostRef.current, {
           videoId,
-          playerVars: { playsinline: 1, rel: 0 },
+          playerVars: { playsinline: 1, rel: 0, cc_load_policy: 0 },
           events: {
             onReady: ({ target }) => {
               playerRef.current = target;
+              disableCaptions(target);
+              captionTimer = setTimeout(() => disableCaptions(target), 1_000);
               poll = setInterval(() => {
                 const time = target.getCurrentTime();
                 if (Number.isFinite(time)) setCurrentTime(time);
               }, 500);
+            },
+            onStateChange: ({ data, target }) => {
+              if (data === 1) disableCaptions(target);
             },
             onError: () => setPlayerError(true),
           },
@@ -102,6 +134,7 @@ export const YouTubeStudyPlayer = forwardRef<YouTubeStudyPlayerHandle, { videoId
       return () => {
         cancelled = true;
         if (poll) clearInterval(poll);
+        if (captionTimer) clearTimeout(captionTimer);
         playerRef.current?.destroy();
         playerRef.current = null;
       };

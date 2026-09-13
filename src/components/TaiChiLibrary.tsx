@@ -69,6 +69,29 @@ export function TaiChiLibrary() {
     setError(null);
   }, [formId]);
 
+  useEffect(() => {
+    function handlePlayerKey(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      const isSeekKey = event.key === "ArrowLeft" || event.key === "ArrowRight";
+      const isPlaybackKey = event.code === "Space";
+      if (!isSeekKey && !isPlaybackKey) return;
+      if (isPlaybackKey && event.repeat) return;
+
+      const target = event.target;
+      if (target instanceof HTMLElement && (
+        target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA"
+      )) return;
+      if (!playerRef.current) return;
+
+      event.preventDefault();
+      if (isPlaybackKey) playerRef.current.togglePlayback();
+      else playerRef.current.seekBy(event.key === "ArrowLeft" ? -5 : 5);
+    }
+
+    window.addEventListener("keydown", handlePlayerKey);
+    return () => window.removeEventListener("keydown", handlePlayerKey);
+  }, []);
+
   const lessons = useMemo<readonly TaiChiLesson[]>(
     () => formId === "yang24" ? buildYang24Lessons(moveLinks) : FIXED_LESSONS[formId],
     [formId, moveLinks]
