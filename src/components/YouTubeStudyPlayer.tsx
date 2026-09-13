@@ -112,7 +112,14 @@ export const YouTubeStudyPlayer = forwardRef<YouTubeStudyPlayerHandle, { videoId
         playerRef.current?.destroy();
         playerRef.current = new YT.Player(hostRef.current, {
           videoId,
-          playerVars: { playsinline: 1, rel: 0, cc_load_policy: 0 },
+          playerVars: {
+            playsinline: 1,
+            rel: 0,
+            cc_load_policy: 0,
+            controls: 0,
+            fs: 0,
+            iv_load_policy: 3,
+          },
           events: {
             onReady: ({ target }) => {
               playerRef.current = target;
