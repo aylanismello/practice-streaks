@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   buildYang24Lessons,
   CHEN18_LESSONS,
@@ -8,6 +9,7 @@ import {
   EIGHT_BROCADES_LESSONS,
   formatTaiChiTimestamp,
   getYouTubeVideoId,
+  parseTaiChiFormId,
   SIX_HEALING_SOUNDS_LESSONS,
   TAI_CHI_10_LESSONS,
   type TaiChiFormId,
@@ -34,7 +36,10 @@ const FIXED_LESSONS: Record<Exclude<TaiChiFormId, "yang24">, readonly TaiChiLess
 };
 
 export function TaiChiLibrary() {
-  const [formId, setFormId] = useState<TaiChiFormId>("yang24");
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const formId = parseTaiChiFormId(searchParams.get("form"));
   const [moveLinks, setMoveLinks] = useState<Yang24MoveLink[]>([]);
   const [marks, setMarks] = useState<TaiChiMark[]>([]);
   const [selectedNumber, setSelectedNumber] = useState(1);
@@ -58,6 +63,12 @@ export function TaiChiLibrary() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    setSelectedNumber(1);
+    setNoteDrafts({});
+    setError(null);
+  }, [formId]);
+
   const lessons = useMemo<readonly TaiChiLesson[]>(
     () => formId === "yang24" ? buildYang24Lessons(moveLinks) : FIXED_LESSONS[formId],
     [formId, moveLinks]
@@ -74,10 +85,9 @@ export function TaiChiLibrary() {
     .sort((a, b) => a.seconds - b.seconds || a.created_at.localeCompare(b.created_at));
 
   function selectForm(nextForm: TaiChiFormId) {
-    setFormId(nextForm);
-    setSelectedNumber(1);
-    setNoteDrafts({});
-    setError(null);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("form", nextForm);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
   async function addMark() {

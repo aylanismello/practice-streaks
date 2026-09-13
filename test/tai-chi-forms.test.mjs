@@ -7,9 +7,17 @@ import {
   EIGHT_BROCADES_LESSONS,
   formatTaiChiTimestamp,
   getYouTubeVideoId,
+  parseTaiChiFormId,
   SIX_HEALING_SOUNDS_LESSONS,
   TAI_CHI_10_LESSONS,
 } from "../src/lib/tai-chi-forms.ts";
+
+test("parses form IDs from shareable URLs and defaults invalid values to Yang 24", () => {
+  assert.equal(parseTaiChiFormId("chen18"), "chen18");
+  assert.equal(parseTaiChiFormId("six_healing_sounds"), "six_healing_sounds");
+  assert.equal(parseTaiChiFormId("nope"), "yang24");
+  assert.equal(parseTaiChiFormId(null), "yang24");
+});
 
 test("maps the final 18 playlist videos to Chen movements 1 through 18", () => {
   assert.equal(CHEN18_LESSONS.length, 18);

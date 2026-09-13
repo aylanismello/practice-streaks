@@ -1,9 +1,16 @@
-export type TaiChiFormId =
-  | "yang24"
-  | "chen18"
-  | "taichi10"
-  | "six_healing_sounds"
-  | "eight_brocades";
+export const TAI_CHI_FORM_IDS = [
+  "yang24",
+  "chen18",
+  "taichi10",
+  "six_healing_sounds",
+  "eight_brocades",
+] as const;
+
+export type TaiChiFormId = typeof TAI_CHI_FORM_IDS[number];
+
+export function parseTaiChiFormId(value: string | null | undefined): TaiChiFormId {
+  return TAI_CHI_FORM_IDS.includes(value as TaiChiFormId) ? value as TaiChiFormId : "yang24";
+}
 
 export interface TaiChiLesson {
   number: number;
