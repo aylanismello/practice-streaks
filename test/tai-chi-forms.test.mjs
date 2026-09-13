@@ -29,7 +29,7 @@ test("maps each single-video practice to its FangYuan playlist video", () => {
       .map((lessons) => lessons.map((lesson) => lesson.youtubeUrl)),
     [
       ["https://youtu.be/f3m-ZImsr_M"],
-      ["https://youtu.be/XDI6PMD7Blg"],
+      ["https://youtu.be/54jCN0Dq0JQ"],
       ["https://youtu.be/8-bZxZZuZwY"],
     ]
   );

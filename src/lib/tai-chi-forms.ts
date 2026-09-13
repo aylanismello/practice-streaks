@@ -38,7 +38,7 @@ export const TAI_CHI_10_LESSONS: readonly TaiChiLesson[] = [
 ];
 
 export const SIX_HEALING_SOUNDS_LESSONS: readonly TaiChiLesson[] = [
-  { number: 1, label: "1", name: "Six Healing Sounds Qigong", youtubeUrl: "https://youtu.be/XDI6PMD7Blg" },
+  { number: 1, label: "1", name: "Six Healing Sounds Qigong", youtubeUrl: "https://youtu.be/54jCN0Dq0JQ" },
 ];
 
 export const EIGHT_BROCADES_LESSONS: readonly TaiChiLesson[] = [

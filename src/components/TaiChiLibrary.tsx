@@ -22,7 +22,7 @@ const FORM_META = {
   yang24: { title: "Yang 24", sourceUrl: YANG24_PLAYLIST_URL, sourceLabel: "Playlist ↗", singleVideo: false },
   chen18: { title: "Chen 18", sourceUrl: CHEN18_PLAYLIST_URL, sourceLabel: "Playlist ↗", singleVideo: false },
   taichi10: { title: "Tai Chi 10", sourceUrl: "https://youtu.be/f3m-ZImsr_M", sourceLabel: "Video ↗", singleVideo: true },
-  six_healing_sounds: { title: "6 Healing Sounds Qigong", sourceUrl: "https://youtu.be/XDI6PMD7Blg", sourceLabel: "Video ↗", singleVideo: true },
+  six_healing_sounds: { title: "6 Healing Sounds Qigong", sourceUrl: "https://youtu.be/54jCN0Dq0JQ", sourceLabel: "Video ↗", singleVideo: true },
   eight_brocades: { title: "8 Brocades Qigong", sourceUrl: "https://youtu.be/8-bZxZZuZwY", sourceLabel: "Video ↗", singleVideo: true },
 } as const;
 
