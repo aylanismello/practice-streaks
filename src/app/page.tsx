@@ -887,16 +887,29 @@ function getAudioCtx(): AudioContext {
   if (!_audioCtx || _audioCtx.state === "closed") {
     _audioCtx = new AudioContext();
   }
-  if (_audioCtx.state === "suspended") {
-    _audioCtx.resume();
-  }
   return _audioCtx;
 }
 
-function playChime() {
+async function resumeAudioCtx(): Promise<AudioContext> {
+  const ctx = getAudioCtx();
+  if (ctx.state === "suspended") await ctx.resume();
+  return ctx;
+}
+
+async function unlockChime() {
+  const ctx = await resumeAudioCtx();
+  // A silent one-frame source binds audio playback to the Start button gesture,
+  // which keeps the later completion chime available in the side widget.
+  const source = ctx.createBufferSource();
+  source.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+  source.connect(ctx.destination);
+  source.start();
+}
+
+async function playChime() {
   try {
-    const ctx = getAudioCtx();
-    const now = ctx.currentTime;
+    const ctx = await resumeAudioCtx();
+    const now = ctx.currentTime + 0.03;
     // Gentle three-tone ascending chime — louder for audibility
     [523.25, 659.25, 783.99].forEach((freq, i) => {
       const osc = ctx.createOscillator();
@@ -910,8 +923,8 @@ function playChime() {
       osc.start(now + i * 0.3);
       osc.stop(now + i * 0.3 + 1.2);
     });
-  } catch {
-    // Audio not available — silently fail
+  } catch (error) {
+    console.warn("Completion chime could not play", error);
   }
 }
 
@@ -1027,6 +1040,15 @@ function FlowTimer({
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => { void playChime(); }}
+              className="w-9 h-9 rounded-full text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+              title="Preview completion sound"
+              aria-label="Preview completion sound"
+            >
+              🔊
+            </button>
             <button
               type="button"
               onClick={onExpand}
@@ -2026,8 +2048,8 @@ export default function Dashboard() {
         setFlowRunning(false);
         setFlowJustCompleted(true);
         setFlowViewWithUrl("widget", "replace");
-        // Chime — may fail if AudioContext not warmed (non-local start)
-        try { playChime(); } catch { /* ignore */ }
+        // Completion audio is independent of widget/fullscreen presentation.
+        void playChime();
         if (typeof document !== "undefined" && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
           new Notification("🌊 Flow Complete!", { body: "Time for a break or another round?" });
         }
@@ -2066,8 +2088,12 @@ export default function Dashboard() {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission();
     }
-    // Warm up AudioContext on user gesture so chime works when timer completes
-    getAudioCtx();
+    // Unlock audio from this user gesture so widget-mode completion can chime later.
+    try {
+      await unlockChime();
+    } catch (error) {
+      console.warn("Completion chime could not be unlocked", error);
+    }
     const startTime = new Date().toISOString();
     try {
       const res = await fetch("/api/flow-active", {
