@@ -984,6 +984,14 @@ function FlowTimer({
     setHoldProgress(0);
   };
 
+  const commitCustomDuration = (value: string) => {
+    const next = Math.max(1, Math.min(120, parseInt(value, 10) || duration));
+    onDurationChange(next);
+    onSecondsLeftChange(next * 60);
+    setEditingDuration(false);
+    return next;
+  };
+
   // Escape moves back one timer level: fullscreen → widget → page.
   useEffect(() => {
     if (!open) return;
@@ -1081,12 +1089,41 @@ function FlowTimer({
             </div>
           ) : (
             <div>
-              <button type="button" onClick={onExpand} className="block w-full text-center group" title="Set a custom duration in fullscreen">
-                <div className="text-5xl font-light tabular-nums tracking-wider">
-                  {`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
+              <div className="text-center">
+                <label className="inline-flex items-baseline justify-center rounded-xl px-3 py-1 focus-within:bg-sky-400/10 focus-within:ring-2 focus-within:ring-sky-400/40 transition-all cursor-text">
+                  <input
+                    key={duration}
+                    ref={customInputRef}
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={120}
+                    defaultValue={duration}
+                    aria-label="Custom focus duration in minutes"
+                    aria-describedby="custom-duration-hint"
+                    className="w-[3ch] bg-transparent text-right text-5xl font-light tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    onFocus={(event) => event.currentTarget.select()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        event.currentTarget.value = String(commitCustomDuration(event.currentTarget.value));
+                        event.currentTarget.blur();
+                      } else if (event.key === "Escape") {
+                        event.stopPropagation();
+                        event.currentTarget.value = String(duration);
+                        event.currentTarget.blur();
+                      }
+                    }}
+                    onBlur={(event) => {
+                      event.currentTarget.value = String(commitCustomDuration(event.currentTarget.value));
+                    }}
+                  />
+                  <span className="text-5xl font-light tabular-nums">:00</span>
+                </label>
+                <div id="custom-duration-hint" className="text-xs text-[var(--text-muted)] mt-1.5">
+                  tap the minutes and type any time · 1–120
                 </div>
-                <div className="text-xs text-[var(--text-muted)] mt-2 group-hover:text-sky-400 transition-colors">custom time in fullscreen ↗</div>
-              </button>
+              </div>
               <div className="flex flex-wrap justify-center gap-1.5 my-4">
                 {[15, 20, 25, 30, 45, 60].map((d) => (
                   <button
@@ -1382,19 +1419,20 @@ function FlowTimer({
                 defaultValue={duration}
                 className="w-28 text-center text-6xl font-extralight rounded-xl border-2 bg-transparent outline-none text-white"
                 style={{ borderColor: "rgba(255,255,255,0.3)" }}
+                onFocus={(event) => event.currentTarget.select()}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    const v = Math.max(1, Math.min(120, parseInt((e.target as HTMLInputElement).value) || 20));
-                    onDurationChange(v);
-                    onSecondsLeftChange(v * 60);
-                    setEditingDuration(false);
+                    e.preventDefault();
+                    e.currentTarget.value = String(commitCustomDuration(e.currentTarget.value));
+                    e.currentTarget.blur();
+                  } else if (e.key === "Escape") {
+                    e.stopPropagation();
+                    e.currentTarget.value = String(duration);
+                    e.currentTarget.blur();
                   }
                 }}
                 onBlur={(e) => {
-                  const v = Math.max(1, Math.min(120, parseInt(e.target.value) || 20));
-                  onDurationChange(v);
-                  onSecondsLeftChange(v * 60);
-                  setEditingDuration(false);
+                  e.currentTarget.value = String(commitCustomDuration(e.currentTarget.value));
                 }}
                 autoFocus
               />
