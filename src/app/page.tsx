@@ -14,6 +14,7 @@ import {
 } from "@/lib/dates";
 import type { ViewMode } from "@/lib/dates";
 import { WEEKLY_PRACTICE_IDS } from "@/lib/weekly-practices";
+import { formatFocusDuration } from "@/lib/today-summary";
 import { WeeklyPracticesCard } from "@/components/WeeklyPracticesCard";
 
 const WIND_DOWN = "23:00"; // 11:00 PM — no screens
@@ -930,6 +931,7 @@ function FlowTimer({
   onSecondsLeftChange,
   onAnotherRound,
   onDoneForNow,
+  today,
 }: {
   open: boolean;
   onClose: () => void;
@@ -945,6 +947,7 @@ function FlowTimer({
   onSecondsLeftChange: (s: number) => void;
   onAnotherRound: () => void;
   onDoneForNow: () => void;
+  today: string;
 }) {
   const [holdProgress, setHoldProgress] = useState(0);
   const [editingDuration, setEditingDuration] = useState(false);
@@ -987,13 +990,7 @@ function FlowTimer({
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
 
-  const todayFlows = flowLogs.filter((p) => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    return p.date === `${y}-${m}-${d}`;
-  });
+  const todayFlows = flowLogs.filter((p) => p.date === today);
 
   if (!open) return null;
 
@@ -1477,6 +1474,125 @@ function FlowHistoryView({ flowLogs }: { flowLogs: FlowLog[] }) {
   );
 }
 
+function TodaySummaryCard({
+  today,
+  dailyPractices,
+  todayLogs,
+  flowLogs,
+  wotLogs,
+  ouraData,
+  focusmateData,
+  onOpenFlow,
+}: {
+  today: string;
+  dailyPractices: PracticeType[];
+  todayLogs: Set<string>;
+  flowLogs: FlowLog[];
+  wotLogs: WotEntry[];
+  ouraData: OuraData | null;
+  focusmateData: FocusmateData | null;
+  onOpenFlow: () => void;
+}) {
+  const practicesDone = dailyPractices.filter((practice) => todayLogs.has(practice.id)).length;
+  const practicesLeft = Math.max(0, dailyPractices.length - practicesDone);
+  const todayFlows = flowLogs.filter((flow) => flow.date === today);
+  const flowMinutes = todayFlows.reduce((total, flow) => total + flow.duration_min, 0);
+  const todayWot = wotLogs.find((entry) => entry.date === today);
+  const wotScore = todayWot ? effectiveWotScore(todayWot) : null;
+  const todayHrv = ouraData?.sleep.find((entry) => entry.day === today)?.average_hrv ?? null;
+  const todaySleep = ouraData?.dailySleep.find((entry) => entry.day === today)?.score ?? null;
+  const focusmateSessions = focusmateData?.sessions.filter(
+    (session) => session.date === today && session.completed
+  ).length ?? 0;
+
+  const metricClass = "rounded-xl px-3 py-3 text-left min-w-0";
+  const metricStyle = {
+    background: "color-mix(in srgb, var(--bg-card) 72%, transparent)",
+    border: "1px solid color-mix(in srgb, var(--border) 74%, transparent)",
+  };
+
+  return (
+    <section
+      className="relative overflow-hidden rounded-2xl p-4 md:p-5 mb-4 md:mb-5"
+      style={{
+        background: "linear-gradient(135deg, color-mix(in srgb, var(--accent) 11%, var(--bg-card)), var(--bg-card) 52%, color-mix(in srgb, #38bdf8 8%, var(--bg-card)))",
+        border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border))",
+        boxShadow: "0 14px 40px rgba(0,0,0,0.06)",
+      }}
+      aria-label="Today summary"
+    >
+      <div className="absolute -right-10 -top-12 h-36 w-36 rounded-full bg-sky-400/10 blur-2xl" />
+      <div className="absolute -bottom-16 left-24 h-32 w-32 rounded-full bg-amber-400/10 blur-2xl" />
+
+      <div className="relative flex items-end justify-between gap-4 mb-4">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-[var(--text-muted)] mb-1.5">
+            ☀️ Today
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl md:text-4xl font-semibold tracking-tight tabular-nums">
+              {practicesDone}/{dailyPractices.length}
+            </span>
+            <span className="text-sm text-[var(--text-muted)]">practices</span>
+          </div>
+        </div>
+        <div className={`text-sm font-medium text-right ${practicesLeft === 0 ? "text-green-400" : "text-[var(--text-muted)]"}`}>
+          {practicesLeft === 0 ? "day complete ✓" : `${practicesLeft} to go`}
+        </div>
+      </div>
+
+      <div className="relative grid grid-cols-2 md:grid-cols-5 gap-2">
+        <button
+          type="button"
+          onClick={onOpenFlow}
+          className={`${metricClass} transition-all hover:-translate-y-0.5 hover:border-sky-400/40 active:scale-[0.98]`}
+          style={metricStyle}
+          title="Open focus timer"
+        >
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">🌊 Focus timer</div>
+          <div className="text-xl md:text-2xl font-semibold tabular-nums text-sky-400">{formatFocusDuration(flowMinutes)}</div>
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+            {todayFlows.length} {todayFlows.length === 1 ? "flow" : "flows"} · open ↗
+          </div>
+        </button>
+
+        <div className={metricClass} style={metricStyle}>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">🪟 WOT</div>
+          <div
+            className="text-xl md:text-2xl font-semibold tabular-nums"
+            style={{ color: wotScore === null ? "var(--text-muted)" : wotScoreCssColor(wotScore) }}
+          >
+            {wotScore ?? "–"}
+          </div>
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+            {wotScore === null ? "not logged" : formatWotScoreLabel(wotScore)}
+          </div>
+        </div>
+
+        <div className={metricClass} style={metricStyle}>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">🎯 Focusmate</div>
+          <div className="text-xl md:text-2xl font-semibold tabular-nums">{focusmateSessions}</div>
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+            {focusmateSessions === 1 ? "session" : "sessions"}
+          </div>
+        </div>
+
+        <div className={metricClass} style={metricStyle}>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">❤️ HRV</div>
+          <div className="text-xl md:text-2xl font-semibold tabular-nums">{todayHrv ?? "–"}</div>
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">ms</div>
+        </div>
+
+        <div className={`${metricClass} col-span-2 md:col-span-1`} style={metricStyle}>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">😴 Sleep</div>
+          <div className="text-xl md:text-2xl font-semibold tabular-nums">{todaySleep ?? "–"}</div>
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">score</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function TripCountdown({ inline }: { inline?: boolean }) {
   // A.F.M lands in Ponta Delgada early on Aug 14; count down to that Azores-time arrival.
   const tripDate = new Date("2026-08-14T01:20:00-01:00");
@@ -1593,7 +1709,6 @@ export default function Dashboard() {
   const [flowSecondsLeft, setFlowSecondsLeft] = useState(20 * 60);
   const [flowSessionWaves, setFlowSessionWaves] = useState<number[]>([]);
   const [flowJustCompleted, setFlowJustCompleted] = useState(false);
-  const [nighttimeLogs, setNighttimeLogs] = useState<{ practice_date: string; completed_at: string | null }[]>([]);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const flowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const flowActiveRef = useRef<{ start_time: string; duration_min: number } | null>(null);
@@ -1654,17 +1769,16 @@ export default function Dashboard() {
   }, []);
 
   const handleFlowComplete = useCallback(async (durationMin: number) => {
-    const now = new Date();
-    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    if (!today) return;
     try {
       await fetch("/api/flow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, duration_min: durationMin }),
+        body: JSON.stringify({ date: today, duration_min: durationMin }),
       });
       await fetchFlowData();
     } catch { /* ignore */ }
-  }, [fetchFlowData]);
+  }, [fetchFlowData, today]);
 
   // Fetch active flow from supabase and sync local state
   const fetchFlowActive = useCallback(async () => {
@@ -1842,15 +1956,6 @@ export default function Dashboard() {
     if (logsRes.data) setLogs(logsRes.data);
     setLoading(false);
 
-    // Fetch nighttime routine completed_at timestamps (non-blocking)
-    supabase
-      .from("practice_log")
-      .select("practice_date, completed_at")
-      .eq("practice_id", "nighttime")
-      .order("practice_date", { ascending: false })
-      .limit(7)
-      .then(({ data }) => { if (data) setNighttimeLogs(data); });
-
     // Fetch Oura data (non-blocking)
     fetch("/api/oura")
       .then((r) => (r.ok ? r.json() : null))
@@ -1950,6 +2055,7 @@ export default function Dashboard() {
         onSecondsLeftChange={setFlowSecondsLeft}
         onAnotherRound={flowAnotherRound}
         onDoneForNow={flowDoneForNow}
+        today={today}
       />
 
       {/* Header with countdown */}
@@ -2084,99 +2190,23 @@ export default function Dashboard() {
         })}
       </div>
 
+      <TodaySummaryCard
+        today={today}
+        dailyPractices={dailyPractices}
+        todayLogs={todayLogs}
+        flowLogs={flowLogs}
+        wotLogs={wotLogs}
+        ouraData={ouraData}
+        focusmateData={focusmateData}
+        onOpenFlow={() => setFlowOpen(true)}
+      />
+
       <WeeklyPracticesCard
         logs={logs}
         today={today}
         togglingId={togglingId}
         onToggle={togglePractice}
       />
-
-      {/* Last Night card */}
-      {(() => {
-        const yesterday = formatDateLocal((() => { const d = new Date(today + "T12:00:00"); d.setDate(d.getDate() - 1); return d; })());
-        const now24hAgoMs = Date.now() - 24 * 60 * 60 * 1000;
-        const lastNight = (ouraData?.sleep ?? [])
-          .filter(s => {
-            if (!s.bedtime_start || !isNighttimeSleep(s.bedtime_start) || !s.bedtime_end) return false;
-            const endMs = new Date(s.bedtime_end).getTime();
-            return endMs > now24hAgoMs;
-          })
-          .sort((a, b) => new Date(b.bedtime_end!).getTime() - new Date(a.bedtime_end!).getTime())[0] ?? null;
-        const nighttimePractice = practices.find(
-          (p) => p.id === "nighttime" || p.name.toLowerCase().includes("nighttime") || p.name.toLowerCase().includes("night")
-        );
-        const routineDone = nighttimePractice
-          ? logs.some((l) => l.practice_date === yesterday && l.practice_id === nighttimePractice.id)
-          : false;
-        const nighttimeEntry = nighttimeLogs.find((n) => n.practice_date === yesterday);
-        const routineTimeLabel = (() => {
-          if (!routineDone) return "✗";
-          if (nighttimeEntry?.completed_at) {
-            const pt = new Date(new Date(nighttimeEntry.completed_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-            const h = pt.getHours();
-            const m = pt.getMinutes();
-            const ampm = h >= 12 ? "p" : "a";
-            const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-            return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
-          }
-          return "✓";
-        })();
-        const formatIsoTime = (iso: string) => {
-          const pt = new Date(new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-          const h = pt.getHours();
-          const m = pt.getMinutes();
-          const ampm = h >= 12 ? "p" : "a";
-          const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-          return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
-        };
-        const hasAsleep = !!lastNight?.bedtime_start;
-        const hasWake = !!lastNight?.bedtime_end;
-        const asleepIso = (() => {
-          if (!lastNight?.bedtime_start) return null;
-          if (lastNight.latency) {
-            return new Date(new Date(lastNight.bedtime_start).getTime() + lastNight.latency * 1000).toISOString();
-          }
-          return lastNight.bedtime_start;
-        })();
-        const inBedLabel = (() => {
-          if (!lastNight?.bedtime_start || !lastNight?.bedtime_end) return null;
-          const startMs = new Date(lastNight.bedtime_start).getTime();
-          const endMs = new Date(lastNight.bedtime_end).getTime();
-          const totalMin = Math.round((endMs - startMs) / 60000);
-          if (totalMin <= 0) return null;
-          const h = Math.floor(totalMin / 60);
-          const m = totalMin % 60;
-          return `${h}h ${m}m in bed`;
-        })();
-        const allPresent = routineDone && hasAsleep && hasWake;
-        const borderColor = allPresent ? "rgba(34,197,94,0.3)" : "rgba(251,191,36,0.3)";
-        return (
-          <div
-            className="rounded-xl p-3 md:p-4 mb-4 md:mb-5"
-            style={{ background: "var(--bg-card)", border: `1px solid ${borderColor}` }}
-          >
-            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5">🌙 Last Night</div>
-            <div className="flex items-center gap-2 text-sm md:text-base">
-              <span className={routineDone ? "text-green-400" : "text-amber-400"}>
-                routine {routineTimeLabel}
-              </span>
-              <span className="text-[var(--text-muted)]">→</span>
-              <span className={hasAsleep ? "text-green-400" : "text-amber-400"}>
-                asleep {asleepIso ? formatIsoTime(asleepIso) : "–"}
-              </span>
-              <span className="text-[var(--text-muted)]">→</span>
-              <span className={hasWake ? "text-green-400" : "text-amber-400"}>
-                wake {hasWake ? formatIsoTime(lastNight!.bedtime_end!) : "–"}
-              </span>
-              {inBedLabel ? (
-                <span className="text-[var(--text-muted)]">
-                  · {inBedLabel}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* History view with time navigation */}
       {(() => {
