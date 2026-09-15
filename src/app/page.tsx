@@ -15,6 +15,7 @@ import {
 import type { ViewMode } from "@/lib/dates";
 import { WEEKLY_PRACTICE_IDS } from "@/lib/weekly-practices";
 import { formatFocusDuration } from "@/lib/today-summary";
+import { flowViewFromSearch, hrefForFlowView, type FlowView } from "@/lib/flow-view";
 import { WeeklyPracticesCard } from "@/components/WeeklyPracticesCard";
 
 const WIND_DOWN = "23:00"; // 11:00 PM — no screens
@@ -918,7 +919,10 @@ const POMO_BG_IMAGE = "https://images.unsplash.com/photo-1601575972982-e428ea86b
 
 function FlowTimer({
   open,
+  expanded,
   onClose,
+  onExpand,
+  onBack,
   flowLogs,
   duration,
   onDurationChange,
@@ -934,7 +938,10 @@ function FlowTimer({
   today,
 }: {
   open: boolean;
+  expanded: boolean;
   onClose: () => void;
+  onExpand: () => void;
+  onBack: () => void;
   flowLogs: FlowLog[];
   duration: number;
   onDurationChange: (d: number) => void;
@@ -977,15 +984,15 @@ function FlowTimer({
     setHoldProgress(0);
   };
 
-  // Escape key minimizes modal
+  // Escape moves back one timer level: fullscreen → widget → page.
   useEffect(() => {
     if (!open) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") expanded ? onBack() : onClose();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [open, onClose]);
+  }, [expanded, onBack, onClose, open]);
 
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
@@ -994,17 +1001,147 @@ function FlowTimer({
 
   if (!open) return null;
 
+  if (!expanded) {
+    return (
+      <aside
+        className="fixed z-50 right-3 bottom-3 md:right-6 md:top-6 md:bottom-auto w-[calc(100%-1.5rem)] md:w-[360px] overflow-hidden rounded-2xl border border-sky-400/30 shadow-2xl"
+        style={{
+          background: "linear-gradient(150deg, color-mix(in srgb, #38bdf8 12%, var(--bg-card)), var(--bg-card) 48%, color-mix(in srgb, var(--accent) 9%, var(--bg-card)))",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.28)",
+        }}
+        aria-label="Focus timer widget"
+      >
+        <div className="flex items-center justify-between px-4 pt-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]">🌊 Flow timer</div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5">
+              {running ? "focus in progress" : justCompleted ? "round complete" : "ready when you are"}
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onExpand}
+              className="w-9 h-9 rounded-full text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+              style={{ border: "1px solid var(--border)" }}
+              title="Open fullscreen timer"
+              aria-label="Open fullscreen timer"
+            >
+              ↗
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-full text-xl text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+              aria-label="Close timer"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 pt-3">
+          {justCompleted ? (
+            <div className="py-3 text-center">
+              <div className="text-4xl mb-2">🌊</div>
+              <div className="text-2xl font-semibold">Done.</div>
+              <div className="text-xs text-[var(--text-muted)] mt-1 mb-5">
+                {sessionWaves.length} {sessionWaves.length === 1 ? "flow" : "flows"} this session
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={onAnotherRound} className="rounded-xl py-2.5 font-semibold text-sm bg-sky-400 text-slate-950 active:scale-[0.98]">
+                  Another round
+                </button>
+                <button type="button" onClick={onDoneForNow} className="rounded-xl py-2.5 font-semibold text-sm active:scale-[0.98]" style={{ border: "1px solid var(--border)" }}>
+                  Done for now
+                </button>
+              </div>
+            </div>
+          ) : running ? (
+            <div className="py-3">
+              <button type="button" onClick={onExpand} className="block w-full text-center group" title="Open fullscreen timer">
+                <div className="text-5xl font-light tabular-nums tracking-wider text-sky-400">
+                  {`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
+                </div>
+                <div className="text-xs text-[var(--text-muted)] mt-2 group-hover:text-sky-400 transition-colors">tap for fullscreen ↗</div>
+              </button>
+              <div className="mt-5 flex justify-center">
+                <div
+                  className="relative select-none cursor-pointer rounded-full px-5 py-2 text-xs text-[var(--text-muted)]"
+                  style={{ border: "1px solid var(--border)", background: `linear-gradient(90deg, rgba(56,189,248,0.18) ${holdProgress}%, transparent ${holdProgress}%)` }}
+                  onMouseDown={startHold}
+                  onMouseUp={endHold}
+                  onMouseLeave={endHold}
+                  onTouchStart={startHold}
+                  onTouchEnd={endHold}
+                >
+                  hold to stop
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <button type="button" onClick={onExpand} className="block w-full text-center group" title="Set a custom duration in fullscreen">
+                <div className="text-5xl font-light tabular-nums tracking-wider">
+                  {`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
+                </div>
+                <div className="text-xs text-[var(--text-muted)] mt-2 group-hover:text-sky-400 transition-colors">custom time in fullscreen ↗</div>
+              </button>
+              <div className="flex flex-wrap justify-center gap-1.5 my-4">
+                {[15, 20, 25, 30, 45, 60].map((d) => (
+                  <button
+                    type="button"
+                    key={d}
+                    onClick={() => { onDurationChange(d); onSecondsLeftChange(d * 60); }}
+                    className="rounded-full px-3 py-1 text-xs font-medium transition-all"
+                    style={{
+                      background: duration === d ? "#38bdf8" : "var(--bg)",
+                      color: duration === d ? "#0a0a0f" : "var(--text-muted)",
+                      border: duration === d ? "1px solid #38bdf8" : "1px solid var(--border)",
+                    }}
+                  >
+                    {d}m
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={onStart} className="w-full rounded-xl py-3 font-semibold bg-sky-400 text-slate-950 active:scale-[0.98]">
+                Start focus
+              </button>
+              {todayFlows.length > 0 && (
+                <div className="text-center text-[11px] text-[var(--text-muted)] mt-3">
+                  {todayFlows.length} {todayFlows.length === 1 ? "flow" : "flows"} · {formatFocusDuration(todayFlows.reduce((total, flow) => total + flow.duration_min, 0))} today
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </aside>
+    );
+  }
+
   const bgStyle = {
     backgroundImage: `url(${POMO_BG_IMAGE})`,
     backgroundSize: "cover",
     backgroundPosition: "center",
   };
+  const fullscreenBackButton = (
+    <button
+      type="button"
+      onClick={onBack}
+      className="absolute top-6 left-6 z-20 inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm text-white/80 hover:text-white transition-colors"
+      style={{ background: "rgba(0,0,0,0.32)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(8px)" }}
+      aria-label="Back to timer widget"
+    >
+      ← Widget
+    </button>
+  );
 
   // --- Completion screen ---
   if (justCompleted) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden" style={bgStyle}>
         <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.65)" }} />
+        {fullscreenBackButton}
         <button
           onClick={onClose}
           className="absolute top-6 right-6 z-10 text-white/80 hover:text-white text-4xl font-light transition-colors w-12 h-12 flex items-center justify-center"
@@ -1071,6 +1208,7 @@ function FlowTimer({
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden" style={bgStyle}>
         <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.50)" }} />
+        {fullscreenBackButton}
         {/* Ambient particle CSS */}
         <style>{`
           @keyframes mist-rise {
@@ -1205,9 +1343,10 @@ function FlowTimer({
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden" style={bgStyle}>
       <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.75)" }} />
+      {fullscreenBackButton}
       <button
         onClick={() => setFlowShowHistory((v) => !v)}
-        className="absolute top-6 left-6 z-10 text-lg transition-all w-10 h-10 flex items-center justify-center rounded-full"
+        className="absolute top-6 left-36 z-10 text-lg transition-all w-10 h-10 flex items-center justify-center rounded-full"
         style={{
           background: flowShowHistory ? "rgba(56,189,248,0.2)" : "transparent",
           color: flowShowHistory ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)",
@@ -1669,7 +1808,7 @@ export default function Dashboard() {
   const [wotLogs, setWotLogs] = useState<WotEntry[]>([]);
   const [focusmateData, setFocusmateData] = useState<FocusmateData | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [flowOpen, setFlowOpen] = useState(false);
+  const [flowView, setFlowView] = useState<FlowView>("closed");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   // Initialize theme from localStorage
@@ -1694,15 +1833,34 @@ export default function Dashboard() {
     });
   }, []);
 
-  // Lock body scroll when flow modal is open
+  const setFlowViewWithUrl = useCallback((next: FlowView, mode: "push" | "replace" = "push") => {
+    setFlowView(next);
+    const href = hrefForFlowView(window.location.href, next);
+    if (mode === "replace") window.history.replaceState(window.history.state, "", href);
+    else window.history.pushState(window.history.state, "", href);
+  }, []);
+
+  const openFlowWidget = useCallback(() => setFlowViewWithUrl("widget"), [setFlowViewWithUrl]);
+  const expandFlow = useCallback(() => setFlowViewWithUrl("full"), [setFlowViewWithUrl]);
+  const backToFlowWidget = useCallback(() => setFlowViewWithUrl("widget", "replace"), [setFlowViewWithUrl]);
+  const closeFlow = useCallback(() => setFlowViewWithUrl("closed", "replace"), [setFlowViewWithUrl]);
+
   useEffect(() => {
-    if (flowOpen) {
+    const syncFlowViewFromUrl = () => setFlowView(flowViewFromSearch(window.location.search));
+    syncFlowViewFromUrl();
+    window.addEventListener("popstate", syncFlowViewFromUrl);
+    return () => window.removeEventListener("popstate", syncFlowViewFromUrl);
+  }, []);
+
+  // Only fullscreen owns page scrolling; the side widget leaves the dashboard usable.
+  useEffect(() => {
+    if (flowView === "full") {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
     }
     return () => { document.body.style.overflow = ""; };
-  }, [flowOpen]);
+  }, [flowView]);
   const [flowLogs, setFlowLogs] = useState<FlowLog[]>([]);
   const [flowDuration, setFlowDuration] = useState(20);
   const [flowRunning, setFlowRunning] = useState(false);
@@ -1829,7 +1987,7 @@ export default function Dashboard() {
         setFlowSecondsLeft(0);
         setFlowRunning(false);
         setFlowJustCompleted(true);
-        setFlowOpen(true);
+        setFlowViewWithUrl("widget", "replace");
         // Chime — may fail if AudioContext not warmed (non-local start)
         try { playChime(); } catch { /* ignore */ }
         if (typeof document !== "undefined" && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
@@ -1851,7 +2009,7 @@ export default function Dashboard() {
       }
     }, 1000);
     return () => { if (flowIntervalRef.current) clearInterval(flowIntervalRef.current); };
-  }, [flowRunning, handleFlowComplete]);
+  }, [flowRunning, handleFlowComplete, setFlowViewWithUrl]);
 
   // Update browser tab title with countdown when timer is running
   useEffect(() => {
@@ -1911,8 +2069,8 @@ export default function Dashboard() {
   const flowDoneForNow = useCallback(() => {
     setFlowJustCompleted(false);
     setFlowSecondsLeft(flowDuration * 60);
-    setFlowOpen(false);
-  }, [flowDuration]);
+    closeFlow();
+  }, [closeFlow, flowDuration]);
 
   const stopFlow = useCallback(async () => {
     setFlowRunning(false);
@@ -2041,8 +2199,11 @@ export default function Dashboard() {
       <CelebrationOverlay open={celebrationOpen} onDismiss={() => setCelebrationOpen(false)} totalPractices={dailyPractices.length} />
       {/* Flow modal */}
       <FlowTimer
-        open={flowOpen}
-        onClose={() => setFlowOpen(false)}
+        open={flowView !== "closed"}
+        expanded={flowView === "full"}
+        onClose={closeFlow}
+        onExpand={expandFlow}
+        onBack={backToFlowWidget}
         flowLogs={flowLogs}
         duration={flowDuration}
         onDurationChange={setFlowDuration}
@@ -2069,9 +2230,9 @@ export default function Dashboard() {
           </h1>
           <p className="text-[var(--text-muted)] text-xs md:text-base">
             {formatDisplayDate(today)}
-            {flowRunning && !flowOpen ? (
+            {flowRunning && flowView === "closed" ? (
               <button
-                onClick={() => { setFlowOpen(true); }}
+                onClick={openFlowWidget}
                 className="inline-flex items-center gap-1 text-xs md:text-sm font-semibold tabular-nums rounded-full px-2 py-0.5 ml-2 transition-all duration-200 hover:scale-105 active:scale-95"
                 style={{
                   color: "#f59e0b",
@@ -2090,7 +2251,7 @@ export default function Dashboard() {
               </button>
             ) : (
               <button
-                onClick={() => { setFlowOpen(true); }}
+                onClick={openFlowWidget}
                 className="inline-block ml-1.5 transition-all duration-200 hover:scale-110 active:scale-95"
                 style={{ opacity: todayFlows.length > 0 ? 1 : 0.5, cursor: "pointer", background: "none", border: "none", verticalAlign: "middle", fontSize: "inherit", padding: 0 }}
                 title="Flowdoro Timer"
@@ -2198,7 +2359,7 @@ export default function Dashboard() {
         wotLogs={wotLogs}
         ouraData={ouraData}
         focusmateData={focusmateData}
-        onOpenFlow={() => setFlowOpen(true)}
+        onOpenFlow={openFlowWidget}
       />
 
       <WeeklyPracticesCard
@@ -2307,6 +2468,19 @@ export default function Dashboard() {
             {viewMode !== "month" && (
               <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 md:p-5 overflow-x-auto">
                 <table className="w-full border-collapse">
+                  <colgroup>
+                    <col />
+                    {rangeDays.map((day) => (
+                      <col
+                        key={day}
+                        style={{
+                          background: day === today
+                            ? "color-mix(in srgb, var(--accent) 9%, transparent)"
+                            : "transparent",
+                        }}
+                      />
+                    ))}
+                  </colgroup>
                   <thead>
                     <tr>
                       <th className="text-left pb-2 pr-3" />
@@ -2314,6 +2488,11 @@ export default function Dashboard() {
                         <th
                           key={day}
                           className="text-center text-[10px] md:text-xs text-[var(--text-muted)] pb-2 font-normal px-1"
+                          style={day === today ? {
+                            color: "var(--accent)",
+                            fontWeight: 700,
+                            borderTop: "2px solid var(--accent)",
+                          } : undefined}
                         >
                           {getDayLabel(day)}
                         </th>
